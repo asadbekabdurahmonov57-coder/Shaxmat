@@ -32,14 +32,17 @@
 
         /* QIZIL NUQTA DIZAYNI */
         .dot {
-            height: 12px;
-            width: 12px;
-            background-color: rgba(255, 0, 0, 0.6);
+            height: 15px;
+            width: 15px;
+            background-color: rgba(255, 0, 0, 0.7);
             border-radius: 50%;
             display: block;
             margin: auto;
-            margin-top: 35%;
+            pointer-events: none; /* Nuqtani bosganda xalaqit bermasligi uchun */
         }
+        
+        /* Tanlangan katakni belgilash */
+        .square-55d63 { display: flex; align-items: center; justify-content: center; }
 
         .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; text-transform: uppercase; }
         
@@ -91,6 +94,7 @@
     let gameId = '';
     let game = new Chess();
     let board = null;
+    let selectedSquare = null;
 
     document.getElementById('my-name-display').innerText = "👋 Salom, " + currentName;
 
@@ -127,7 +131,6 @@
         startGame(gid, 'white');
     }
 
-    // YO'LAKLARNI KO'RSATISH FUNKSIYALARI
     function removeDots () {
         $('#board .square-55d63').find('.dot').remove();
     }
@@ -137,26 +140,41 @@
         $square.append('<div class="dot"></div>');
     }
 
-    function onMouseoverSquare (square, piece) {
-        // Faqat o'zimizning donalarimiz yo'llarini ko'rsatish
-        if (!piece) return;
-        if ((myRole === 'white' && piece.search(/^b/) !== -1) ||
-            (myRole === 'black' && piece.search(/^w/) !== -1)) return;
+    // Mobil uchun bosib yurish funksiyasi
+    function onSquareClick (square) {
+        if (game.game_over()) return;
 
-        let moves = game.moves({
-            square: square,
-            verbose: true
-        });
+        // Agar bu navbat bizniki bo'lmasa, hech narsa qilma
+        if ((game.turn() === 'w' && myRole === 'black') || (game.turn() === 'b' && myRole === 'white')) return;
 
-        if (moves.length === 0) return;
+        let moves = game.moves({ square: square, verbose: true });
 
-        for (let i = 0; i < moves.length; i++) {
-            addDot(moves[i].to);
+        // 1. Agar oldin tanlangan katak bo'lsa va yangi bosilgan katakda nuqta bo'lsa - YURISH
+        if (selectedSquare && $('#board .square-' + square).find('.dot').length > 0) {
+            makeMove(selectedSquare, square);
+            return;
+        }
+
+        // 2. Aks holda nuqtalarni tozalab, yangi tosh yo'llarini ko'rsatish
+        removeDots();
+        selectedSquare = null;
+
+        let piece = game.get(square);
+        if (piece && piece.color === game.turn()) {
+            selectedSquare = square;
+            moves.forEach(move => addDot(move.to));
         }
     }
 
-    function onMouseoutSquare (square, piece) {
+    function makeMove(from, to) {
+        const move = game.move({ from: from, to: to, promotion: 'q' });
+        if (move === null) return;
+
         removeDots();
+        selectedSquare = null;
+        board.position(game.fen());
+        db.ref('games/' + gameId).update({ fen: game.fen() });
+        updateStatus();
     }
 
     function startGame(id, role) {
@@ -175,12 +193,16 @@
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
             onDragStart: onDragStart,
             onDrop: onDrop,
-            onSnapEnd: onSnapEnd,
-            onMouseoverSquare: onMouseoverSquare, // Yangi qo'shildi
-            onMouseoutSquare: onMouseoutSquare   // Yangi qo'shildi
+            onSnapEnd: onSnapEnd
         };
         board = Chessboard('board', config);
         
+        // Katak bosilishini kuzatish
+        $('#board').on('click', '.square-55d63', function() {
+            let square = $(this).data('square');
+            onSquareClick(square);
+        });
+
         db.ref('games/' + gameId).on('value', (snap) => {
             const data = snap.val();
             if (data && data.fen !== game.fen()) {
@@ -204,10 +226,10 @@
             (game.turn() === 'b' && myRole === 'white')) {
             return false;
         }
+        removeDots();
     }
 
     function onDrop (source, target) {
-        removeDots(); // Yurilgandan keyin nuqtalarni o'chirish
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (move === null) return 'snapback';
         
