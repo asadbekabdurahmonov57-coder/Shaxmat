@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Telegram Chess Online</title>
+    <title>Online Chess - Telegram</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
@@ -14,82 +14,99 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
-        /* Sizning dizayningizni saqlab qolamiz */
         body { 
             display: flex; flex-direction: column; justify-content: center; align-items: center; 
             height: 100vh; background: #1a1a1a; margin: 0; font-family: sans-serif; color: white; overflow: hidden;
         }
 
-        #status-container { margin-bottom: 10px; text-align: center; }
-        #status { font-size: 18px; font-weight: 900; background: #2c2c2c; padding: 10px 25px; border-radius: 30px; border: 2px solid #444; color: #f1c40f; }
+        /* Navbat paneli - Rasmga mos */
+        #status-container { margin-bottom: 10px; text-align: center; display: none; }
+        #status { 
+            font-size: 18px; font-weight: 900; background: #2c2c2c; padding: 10px 25px; 
+            border-radius: 30px; border: 2px solid #444; color: #f1c40f; text-transform: uppercase;
+        }
         
         /* Shaxmat taxtasi dizayni */
         #board { width: 95vw; max-width: 400px; margin: 10px; border: 5px solid #3e2723; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         
-        /* Rasmga mos ranglar */
+        /* Kataklar rangi */
         .white-1e1d1 { background-color: #dcbfa6 !important; }
         .black-3c85d { background-color: #7d4a3e !important; }
 
-        .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; }
-        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #online-list { width: 80%; max-height: 200px; overflow-y: auto; background: #2c2c2c; border-radius: 10px; padding: 10px; margin-top: 10px; }
-        .user-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #444; align-items: center; width: 100%; }
-        .invite-btn { background: #2ecc71; color: white; border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; }
+        .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; text-transform: uppercase; }
         
-        #resign-btn { background: #e74c3c; color: white; padding: 12px 25px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; display: none; }
+        /* Menu */
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #online-list { width: 80%; max-height: 250px; overflow-y: auto; background: #2c2c2c; border-radius: 10px; padding: 10px; margin-top: 10px; border: 1px solid #444; }
+        .user-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #444; align-items: center; width: 100%; }
+        .invite-btn { background: #2ecc71; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        
+        /* Taslim bo'lish tugmasi */
+        #resign-btn { background: #e74c3c; color: white; padding: 12px 25px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; display: none; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="menu">
-    <h1 style="color:#f1c40f;">♟️ ONLINE SHAXMAT</h1>
-    <p id="my-name-display">Yuklanmoqda...</p>
-    <h3 style="margin-top: 20px;">🟢 Onlayn o'yinchilar:</h3>
+    <h1 style="color:#f1c40f; font-weight: 900;">♟️ CHESS ONLINE</h1>
+    <p id="my-name-display" style="font-weight: bold;">Yuklanmoqda...</p>
+    <h3 style="margin-top: 20px;">🟢 ONLAYN O'YINCHILAR</h3>
     <div id="online-list">Hozircha hech kim yo'q...</div>
     <br>
-    <button class="btn" onclick="tg.close()">Chiqish</button>
+    <button class="btn" onclick="exitApp()">Chiqish</button>
 </div>
 
-<div id="status-container" style="display:none;">
-    <div id="status">Oqlar navbati</div>
+<div id="status-container">
+    <div id="status">OQLAR NAVBATI</div>
 </div>
 
-<div id="board" style="display:none;"></div>
+<div id="board"></div>
 
-<button id="resign-btn" onclick="resignGame()">🏳️ Taslim bo'lish</button>
+<button id="resign-btn" onclick="resignGame()">🚩 Taslim bo'lish</button>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // --- SIZ BERGAN FIREBASE KALITLARI ---
+    // 1. FIREBASE SOZLAMALARI
     const firebaseConfig = {
         apiKey: "AIzaSyDvuBmuKfEPnd-ocDxzbzmfdCRLZUXnEO0",
         authDomain: "shaxmat-6862a.firebaseapp.com",
         projectId: "shaxmat-6862a",
         storageBucket: "shaxmat-6862a.firebasestorage.app",
         messagingSenderId: "54824096330",
-        appId: "1:54824096330:web:5f90df28acd02c98394cb3",
-        measurementId: "G-BNLS64762F"
+        appId: "1:54824096330:web:5f90df28acd02c98394cb3"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let userId = tg.initDataUnsafe?.user?.id.toString() || "user_" + Math.floor(Math.random()*1000);
+    let userId = tg.initDataUnsafe?.user?.id.toString() || "u" + Math.floor(Math.random()*10000);
     let currentName = tg.initDataUnsafe?.user?.first_name || "O'yinchi";
-    let myRole = ''; // 'white' yoki 'black'
+    let myRole = ''; 
     let gameId = '';
     let game = new Chess();
     let board = null;
 
     document.getElementById('my-name-display').innerText = "👋 Salom, " + currentName;
 
-    // Presence (Online holat)
+    // 2. GITHUB RASMLARINI MOSLASH
+    const githubUser = "asadbekabdurah";
+    const repoName = "shaxmat"; 
+    const baseUrl = `https://raw.githubusercontent.com/${githubUser}/${repoName}/main/`;
+
+    const pieceMapping = {
+        'wP': 'oq piyoda.png', 'wR': 'oq rux.png', 'wN': 'oq ot.png',
+        'wB': 'oq fil.png',   'wQ': 'oq vazir.png', 'wK': 'oq shoh.png',
+        'bP': 'qora piyoda.png', 'bR': 'qora rux.png', 'bN': 'qora ot.png',
+        'bB': 'qora fil.png',   'bQ': 'qora vazir.png', 'bK': 'qora shoh.png'
+    };
+
+    // Online holat
     const myPres = db.ref('presence/' + userId);
     myPres.set({ name: currentName, online: true, inGame: false });
     myPres.onDisconnect().remove();
 
-    // Onlayn ro'yxatni yangilash
+    // Onlayn ro'yxat
     db.ref('presence').on('value', (snap) => {
         const list = document.getElementById('online-list');
         list.innerHTML = '';
@@ -97,17 +114,17 @@
             if (c.key !== userId && c.val().online && !c.val().inGame) {
                 list.innerHTML += `<div class="user-item">
                     <span>👤 ${c.val().name}</span> 
-                    <button class="invite-btn" onclick="invite('${c.key}')">🎮 Taklif</button>
+                    <button class="invite-btn" onclick="invite('${c.key}')">O'YIN</button>
                 </div>`;
             }
         });
     });
 
-    // Takliflarni eshitish
+    // Takliflarni qabul qilish
     db.ref('invites/' + userId).on('value', (snap) => {
         const inv = snap.val();
         if (inv) {
-            if (confirm(inv.fromName + " shaxmatga taklif qildi. Qabul qilasizmi?")) {
+            if (confirm(inv.fromName + " taklif yubordi. Qabul qilasizmi?")) {
                 db.ref('invites/' + userId).remove();
                 startGame(inv.gameId, 'black');
             }
@@ -126,23 +143,22 @@
         db.ref('presence/' + userId).update({ inGame: true });
         
         document.getElementById('menu').style.display = 'none';
-        document.getElementById('board').style.display = 'block';
         document.getElementById('status-container').style.display = 'block';
         document.getElementById('resign-btn').style.display = 'block';
 
-        // Shaxmat taxtasini yaratish
         const config = {
             draggable: true,
             position: 'start',
             orientation: myRole,
-            pieceTheme: 'https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/wikipedia/{piece}.png',
+            pieceTheme: function (piece) {
+                return baseUrl + encodeURIComponent(pieceMapping[piece]);
+            },
             onDragStart: onDragStart,
             onDrop: onDrop,
             onSnapEnd: onSnapEnd
         };
         board = Chessboard('board', config);
         
-        // Firebase orqali yurishlarni tinglash
         db.ref('games/' + gameId).on('value', (snap) => {
             const data = snap.val();
             if (data && data.fen !== game.fen()) {
@@ -172,17 +188,17 @@
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (move === null) return 'snapback';
         
-        db.ref('games/' + gameId).update({ fen: game.fen(), turn: game.turn() });
+        db.ref('games/' + gameId).update({ fen: game.fen() });
         updateStatus();
     }
 
     function onSnapEnd () { board.position(game.fen()); }
 
     function updateStatus() {
-        let status = game.turn() === 'w' ? "Oqlar navbati" : "Qoralar navbati";
-        if (game.in_checkmate()) status = "MOT! O'yin tugadi.";
-        else if (game.in_draw()) status = "Durang!";
-        else if (game.in_check()) status += " (SHOH!)";
+        let status = game.turn() === 'w' ? "OQLAR NAVBATI" : "QORALAR NAVBATI";
+        if (game.in_checkmate()) status = "O'YIN TUGADI (MOT)";
+        else if (game.in_draw()) status = "DURANG";
+        else if (game.in_check()) status += " (SHOH)";
         
         document.getElementById('status').innerText = status;
     }
@@ -194,7 +210,14 @@
         }
     }
 
-    function handleInteraction() { /* Kerak bo'lsa audio qo'shish mumkin */ }
+    // CHIQUV FUNKSIYASI
+    function exitApp() {
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.close();
+        } else {
+            window.location.href = "https://www.google.com";
+        }
+    }
 </script>
 </body>
 </html>
