@@ -30,28 +30,19 @@
         .white-1e1d1 { background-color: #dcbfa6 !important; }
         .black-3c85d { background-color: #7d4a3e !important; }
 
-        /* BO'SH KATAK UCHUN QIZIL NUQTA */
         .dot {
-            height: 20px;
-            width: 20px;
-            background-color: rgba(255, 0, 0, 0.8);
-            border-radius: 50%;
-            display: block;
-            margin: auto;
-            pointer-events: none;
+            height: 20px; width: 20px; background-color: rgba(255, 0, 0, 0.8);
+            border-radius: 50%; display: block; margin: auto; pointer-events: none;
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
         }
 
-        /* DUSHMAN TOSHI UCHUN TO'RTBURCHAK QIZIL CHEGARA */
         .enemy-target {
             box-shadow: inset 0 0 15px 5px rgba(255, 0, 0, 0.9) !important;
-            border: 2px solid red !important;
-            box-sizing: border-box;
+            border: 2px solid red !important; box-sizing: border-box;
         }
 
-        /* SHOH XAVF OSTIDA (SHOH) */
         .king-check {
-            background-color: #e74c3c !important; /* To'q qizil */
+            background-color: #e74c3c !important;
             box-shadow: inset 0 0 20px 10px rgba(0, 0, 0, 0.3) !important;
         }
         
@@ -65,6 +56,15 @@
         .invite-btn { background: #2ecc71; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         
         #resign-btn { background: #e74c3c; color: white; padding: 12px 25px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; display: none; margin-top: 10px; }
+
+        /* PROMOTION MODAL */
+        #promotion-menu {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 200; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .promo-options { display: flex; gap: 15px; background: #2c2c2c; padding: 20px; border-radius: 15px; border: 2px solid #f1c40f; }
+        .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.2s; }
+        .promo-piece:hover { transform: scale(1.1); }
     </style>
 </head>
 <body>
@@ -76,6 +76,12 @@
     <div id="online-list">Hozircha hech kim yo'q...</div>
     <br>
     <button class="btn" onclick="exitApp()">Chiqish</button>
+</div>
+
+<div id="promotion-menu">
+    <h2 style="color:#f1c40f; text-align: center;">TOSHNI TANLANG</h2>
+    <div class="promo-options" id="promo-list">
+        </div>
 </div>
 
 <div id="status-container">
@@ -108,6 +114,7 @@
     let game = new Chess();
     let board = null;
     let selectedSquare = null;
+    let pendingPromotion = null; // Almashish kutilayotgan yurish ma'lumoti
 
     document.getElementById('my-name-display').innerText = "👋 Salom, " + currentName;
 
@@ -152,7 +159,6 @@
     function addMarker (square) {
         let $square = $('#board .square-' + square);
         let piece = game.get(square);
-        
         if (piece) {
             $square.addClass('enemy-target');
         } else {
@@ -167,7 +173,7 @@
 
         let $target = $('#board .square-' + square);
         if (selectedSquare && ($target.find('.dot').length > 0 || $target.hasClass('enemy-target'))) {
-            makeMove(selectedSquare, square);
+            checkPromotion(selectedSquare, square);
             return;
         }
 
@@ -182,8 +188,45 @@
         }
     }
 
-    function makeMove(from, to) {
-        const move = game.move({ from: from, to: to, promotion: 'q' });
+    // Piyoda almashishini tekshirish
+    function checkPromotion(from, to) {
+        let piece = game.get(from);
+        if (piece.type === 'p' && ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'))) {
+            pendingPromotion = { from: from, to: to };
+            showPromotionMenu(piece.color);
+        } else {
+            makeMove(from, to, 'q');
+        }
+    }
+
+    function showPromotionMenu(color) {
+        const menu = document.getElementById('promotion-menu');
+        const list = document.getElementById('promo-list');
+        const pieces = [
+            { type: 'q', name: 'Farzin' },
+            { type: 'r', name: 'Ruh' },
+            { type: 'b', name: 'Fil' },
+            { type: 'n', name: 'Ot' }
+        ];
+        
+        list.innerHTML = '';
+        pieces.forEach(p => {
+            const imgUrl = `https://chessboardjs.com/img/chesspieces/wikipedia/${color.toUpperCase()}${p.type.toUpperCase()}.png`;
+            list.innerHTML += `<img src="${imgUrl}" class="promo-piece" onclick="selectPromotion('${p.type}')" alt="${p.name}">`;
+        });
+        menu.style.display = 'flex';
+    }
+
+    function selectPromotion(pieceType) {
+        document.getElementById('promotion-menu').style.display = 'none';
+        if (pendingPromotion) {
+            makeMove(pendingPromotion.from, pendingPromotion.to, pieceType);
+            pendingPromotion = null;
+        }
+    }
+
+    function makeMove(from, to, promotionType) {
+        const move = game.move({ from: from, to: to, promotion: promotionType || 'q' });
         if (move === null) return;
 
         removeMarkers();
@@ -203,13 +246,10 @@
         document.getElementById('resign-btn').style.display = 'block';
 
         const config = {
-            draggable: true,
+            draggable: false, // Click-to-move rejimi uchun
             position: 'start',
             orientation: myRole,
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onSnapEnd: onSnapEnd
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
         };
         board = Chessboard('board', config);
         
@@ -233,36 +273,12 @@
         updateStatus();
     }
 
-    function onDragStart (source, piece, position, orientation) {
-        if (game.game_over()) return false;
-        if ((myRole === 'white' && piece.search(/^b/) !== -1) ||
-            (myRole === 'black' && piece.search(/^w/) !== -1) ||
-            (game.turn() === 'w' && myRole === 'black') ||
-            (game.turn() === 'b' && myRole === 'white')) {
-            return false;
-        }
-    }
-
-    function onDrop (source, target) {
-        const move = game.move({ from: source, to: target, promotion: 'q' });
-        if (move === null) return 'snapback';
-        removeMarkers();
-        db.ref('games/' + gameId).update({ fen: game.fen() });
-        updateStatus();
-    }
-
-    function onSnapEnd () { board.position(game.fen()); }
-
     function updateStatus() {
         let status = game.turn() === 'w' ? "OQLAR NAVBATI" : "QORALAR NAVBATI";
-        
-        // Shoh katagini tozalash
         $('#board .square-55d63').removeClass('king-check');
 
         if (game.in_check()) {
             status += "<br><span style='color: #e74c3c; font-size: 14px;'>SHOH XAVF OSTIDA!</span>";
-            
-            // Shoh qayerdaligini topish va rangini o'zgartirish
             const turn = game.turn();
             const boardMatrix = game.board();
             for (let i = 0; i < 8; i++) {
