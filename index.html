@@ -30,19 +30,19 @@
         .white-1e1d1 { background-color: #dcbfa6 !important; }
         .black-3c85d { background-color: #7d4a3e !important; }
 
-        /* QIZIL NUQTA DIZAYNI */
+        /* QIZIL NUQTA - YURISH MUMKIN BO'LGAN JOY */
         .dot {
-            height: 15px;
-            width: 15px;
-            background-color: rgba(255, 0, 0, 0.7);
+            height: 20px;
+            width: 20px;
+            background-color: rgba(255, 0, 0, 0.8);
             border-radius: 50%;
             display: block;
             margin: auto;
-            pointer-events: none; /* Nuqtani bosganda xalaqit bermasligi uchun */
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
         }
         
-        /* Tanlangan katakni belgilash */
-        .square-55d63 { display: flex; align-items: center; justify-content: center; }
+        .square-55d63 { display: flex; align-items: center; justify-content: center; position: relative; }
 
         .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; text-transform: uppercase; }
         
@@ -140,29 +140,29 @@
         $square.append('<div class="dot"></div>');
     }
 
-    // Mobil uchun bosib yurish funksiyasi
+    // BOSIB YURISH - ASOSIY QISM
     function onSquareClick (square) {
         if (game.game_over()) return;
 
-        // Agar bu navbat bizniki bo'lmasa, hech narsa qilma
-        if ((game.turn() === 'w' && myRole === 'black') || (game.turn() === 'b' && myRole === 'white')) return;
+        // Navbatni tekshirish
+        const turn = game.turn();
+        if ((turn === 'w' && myRole === 'black') || (turn === 'b' && myRole === 'white')) return;
 
-        let moves = game.moves({ square: square, verbose: true });
-
-        // 1. Agar oldin tanlangan katak bo'lsa va yangi bosilgan katakda nuqta bo'lsa - YURISH
+        // Agar nuqta bor katak bosilsa - YURISH
         if (selectedSquare && $('#board .square-' + square).find('.dot').length > 0) {
             makeMove(selectedSquare, square);
             return;
         }
 
-        // 2. Aks holda nuqtalarni tozalab, yangi tosh yo'llarini ko'rsatish
+        // Toshni tanlash
         removeDots();
-        selectedSquare = null;
-
         let piece = game.get(square);
-        if (piece && piece.color === game.turn()) {
+        if (piece && piece.color === turn) {
             selectedSquare = square;
-            moves.forEach(move => addDot(move.to));
+            let moves = game.moves({ square: square, verbose: true });
+            moves.forEach(m => addDot(m.to));
+        } else {
+            selectedSquare = null;
         }
     }
 
@@ -197,8 +197,8 @@
         };
         board = Chessboard('board', config);
         
-        // Katak bosilishini kuzatish
-        $('#board').on('click', '.square-55d63', function() {
+        // MOBIL VA KOMPYUTER UCHUN BOSISHNI KUYCHAYTIRISH
+        $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
             let square = $(this).data('square');
             onSquareClick(square);
         });
@@ -226,13 +226,13 @@
             (game.turn() === 'b' && myRole === 'white')) {
             return false;
         }
-        removeDots();
     }
 
     function onDrop (source, target) {
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (move === null) return 'snapback';
         
+        removeDots();
         db.ref('games/' + gameId).update({ fen: game.fen() });
         updateStatus();
     }
