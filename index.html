@@ -57,14 +57,13 @@
         
         #resign-btn { background: #e74c3c; color: white; padding: 12px 25px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; display: none; margin-top: 10px; }
 
-        /* PROMOTION MODAL */
         #promotion-menu {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.8); z-index: 200; flex-direction: column; align-items: center; justify-content: center;
         }
         .promo-options { display: flex; gap: 15px; background: #2c2c2c; padding: 20px; border-radius: 15px; border: 2px solid #f1c40f; }
         .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.2s; }
-        .promo-piece:hover { transform: scale(1.1); }
+        .promo-piece:hover { transform: scale(1.2); }
     </style>
 </head>
 <body>
@@ -79,9 +78,8 @@
 </div>
 
 <div id="promotion-menu">
-    <h2 style="color:#f1c40f; text-align: center;">TOSHNI TANLANG</h2>
-    <div class="promo-options" id="promo-list">
-        </div>
+    <h2 style="color:#f1c40f; text-align: center; text-transform: uppercase;">Toshni tanlang</h2>
+    <div class="promo-options" id="promo-list"></div>
 </div>
 
 <div id="status-container">
@@ -114,7 +112,7 @@
     let game = new Chess();
     let board = null;
     let selectedSquare = null;
-    let pendingPromotion = null; // Almashish kutilayotgan yurish ma'lumoti
+    let pendingPromotion = null;
 
     document.getElementById('my-name-display').innerText = "👋 Salom, " + currentName;
 
@@ -188,7 +186,6 @@
         }
     }
 
-    // Piyoda almashishini tekshirish
     function checkPromotion(from, to) {
         let piece = game.get(from);
         if (piece.type === 'p' && ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'))) {
@@ -202,17 +199,13 @@
     function showPromotionMenu(color) {
         const menu = document.getElementById('promotion-menu');
         const list = document.getElementById('promo-list');
-        const pieces = [
-            { type: 'q', name: 'Farzin' },
-            { type: 'r', name: 'Ruh' },
-            { type: 'b', name: 'Fil' },
-            { type: 'n', name: 'Ot' }
-        ];
+        const pieceTypes = ['q', 'r', 'b', 'n']; // Farzin, Ruh, Fil, Ot
         
         list.innerHTML = '';
-        pieces.forEach(p => {
-            const imgUrl = `https://chessboardjs.com/img/chesspieces/wikipedia/${color.toUpperCase()}${p.type.toUpperCase()}.png`;
-            list.innerHTML += `<img src="${imgUrl}" class="promo-piece" onclick="selectPromotion('${p.type}')" alt="${p.name}">`;
+        pieceTypes.forEach(type => {
+            const fileName = color + type.toUpperCase();
+            const imgUrl = `https://chessboardjs.com/img/chesspieces/wikipedia/${fileName}.png`;
+            list.innerHTML += `<img src="${imgUrl}" class="promo-piece" onclick="selectPromotion('${type}')">`;
         });
         menu.style.display = 'flex';
     }
@@ -246,7 +239,7 @@
         document.getElementById('resign-btn').style.display = 'block';
 
         const config = {
-            draggable: false, // Click-to-move rejimi uchun
+            draggable: false,
             position: 'start',
             orientation: myRole,
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
