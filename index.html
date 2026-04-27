@@ -30,6 +30,17 @@
         .white-1e1d1 { background-color: #dcbfa6 !important; }
         .black-3c85d { background-color: #7d4a3e !important; }
 
+        /* QIZIL NUQTA DIZAYNI */
+        .dot {
+            height: 12px;
+            width: 12px;
+            background-color: rgba(255, 0, 0, 0.6);
+            border-radius: 50%;
+            display: block;
+            margin: auto;
+            margin-top: 35%;
+        }
+
         .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; text-transform: uppercase; }
         
         #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -116,6 +127,38 @@
         startGame(gid, 'white');
     }
 
+    // YO'LAKLARNI KO'RSATISH FUNKSIYALARI
+    function removeDots () {
+        $('#board .square-55d63').find('.dot').remove();
+    }
+
+    function addDot (square) {
+        let $square = $('#board .square-' + square);
+        $square.append('<div class="dot"></div>');
+    }
+
+    function onMouseoverSquare (square, piece) {
+        // Faqat o'zimizning donalarimiz yo'llarini ko'rsatish
+        if (!piece) return;
+        if ((myRole === 'white' && piece.search(/^b/) !== -1) ||
+            (myRole === 'black' && piece.search(/^w/) !== -1)) return;
+
+        let moves = game.moves({
+            square: square,
+            verbose: true
+        });
+
+        if (moves.length === 0) return;
+
+        for (let i = 0; i < moves.length; i++) {
+            addDot(moves[i].to);
+        }
+    }
+
+    function onMouseoutSquare (square, piece) {
+        removeDots();
+    }
+
     function startGame(id, role) {
         gameId = id;
         myRole = role;
@@ -129,11 +172,12 @@
             draggable: true,
             position: 'start',
             orientation: myRole,
-            // MANA SHU QISMI DONALARNI INTERNETDAN OLIB BERADI
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
             onDragStart: onDragStart,
             onDrop: onDrop,
-            onSnapEnd: onSnapEnd
+            onSnapEnd: onSnapEnd,
+            onMouseoverSquare: onMouseoverSquare, // Yangi qo'shildi
+            onMouseoutSquare: onMouseoutSquare   // Yangi qo'shildi
         };
         board = Chessboard('board', config);
         
@@ -163,6 +207,7 @@
     }
 
     function onDrop (source, target) {
+        removeDots(); // Yurilgandan keyin nuqtalarni o'chirish
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (move === null) return 'snapback';
         
