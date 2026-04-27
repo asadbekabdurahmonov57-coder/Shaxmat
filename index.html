@@ -30,7 +30,7 @@
         .white-1e1d1 { background-color: #dcbfa6 !important; }
         .black-3c85d { background-color: #7d4a3e !important; }
 
-        /* QIZIL NUQTA - YURISH MUMKIN BO'LGAN JOY */
+        /* BO'SH KATAK UCHUN QIZIL NUQTA */
         .dot {
             height: 20px;
             width: 20px;
@@ -40,6 +40,13 @@
             margin: auto;
             pointer-events: none;
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+        }
+
+        /* DUSHMAN TOSHI UCHUN TO'RTBURCHAK QIZIL CHEGARA */
+        .enemy-target {
+            box-shadow: inset 0 0 15px 5px rgba(255, 0, 0, 0.9) !important;
+            border: 2px solid red !important;
+            box-sizing: border-box;
         }
         
         .square-55d63 { display: flex; align-items: center; justify-content: center; position: relative; }
@@ -131,36 +138,42 @@
         startGame(gid, 'white');
     }
 
-    function removeDots () {
+    function removeMarkers () {
         $('#board .square-55d63').find('.dot').remove();
+        $('#board .square-55d63').removeClass('enemy-target');
     }
 
-    function addDot (square) {
+    function addMarker (square) {
         let $square = $('#board .square-' + square);
-        $square.append('<div class="dot"></div>');
+        let piece = game.get(square);
+        
+        if (piece) {
+            // Agar dushman toshi bo'lsa - To'rtburchak qizil
+            $square.addClass('enemy-target');
+        } else {
+            // Agar bo'sh bo'lsa - Nuqta
+            $square.append('<div class="dot"></div>');
+        }
     }
 
-    // BOSIB YURISH - ASOSIY QISM
     function onSquareClick (square) {
         if (game.game_over()) return;
-
-        // Navbatni tekshirish
         const turn = game.turn();
         if ((turn === 'w' && myRole === 'black') || (turn === 'b' && myRole === 'white')) return;
 
-        // Agar nuqta bor katak bosilsa - YURISH
-        if (selectedSquare && $('#board .square-' + square).find('.dot').length > 0) {
+        // Yurishni tekshirish (nuqta bor yoki dushman toshi bor katak bo'lsa)
+        let $target = $('#board .square-' + square);
+        if (selectedSquare && ($target.find('.dot').length > 0 || $target.hasClass('enemy-target'))) {
             makeMove(selectedSquare, square);
             return;
         }
 
-        // Toshni tanlash
-        removeDots();
+        removeMarkers();
         let piece = game.get(square);
         if (piece && piece.color === turn) {
             selectedSquare = square;
             let moves = game.moves({ square: square, verbose: true });
-            moves.forEach(m => addDot(m.to));
+            moves.forEach(m => addMarker(m.to));
         } else {
             selectedSquare = null;
         }
@@ -170,7 +183,7 @@
         const move = game.move({ from: from, to: to, promotion: 'q' });
         if (move === null) return;
 
-        removeDots();
+        removeMarkers();
         selectedSquare = null;
         board.position(game.fen());
         db.ref('games/' + gameId).update({ fen: game.fen() });
@@ -197,7 +210,6 @@
         };
         board = Chessboard('board', config);
         
-        // MOBIL VA KOMPYUTER UCHUN BOSISHNI KUYCHAYTIRISH
         $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
             let square = $(this).data('square');
             onSquareClick(square);
@@ -231,8 +243,7 @@
     function onDrop (source, target) {
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (move === null) return 'snapback';
-        
-        removeDots();
+        removeMarkers();
         db.ref('games/' + gameId).update({ fen: game.fen() });
         updateStatus();
     }
@@ -244,7 +255,6 @@
         if (game.in_checkmate()) status = "O'YIN TUGADI (MOT)";
         else if (game.in_draw()) status = "DURANG";
         else if (game.in_check()) status += " (SHOH)";
-        
         document.getElementById('status').innerText = status;
     }
 
