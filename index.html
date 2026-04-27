@@ -48,6 +48,12 @@
             border: 2px solid red !important;
             box-sizing: border-box;
         }
+
+        /* SHOH XAVF OSTIDA (SHOH) */
+        .king-check {
+            background-color: #e74c3c !important; /* To'q qizil */
+            box-shadow: inset 0 0 20px 10px rgba(0, 0, 0, 0.3) !important;
+        }
         
         .square-55d63 { display: flex; align-items: center; justify-content: center; position: relative; }
 
@@ -148,10 +154,8 @@
         let piece = game.get(square);
         
         if (piece) {
-            // Agar dushman toshi bo'lsa - To'rtburchak qizil
             $square.addClass('enemy-target');
         } else {
-            // Agar bo'sh bo'lsa - Nuqta
             $square.append('<div class="dot"></div>');
         }
     }
@@ -161,7 +165,6 @@
         const turn = game.turn();
         if ((turn === 'w' && myRole === 'black') || (turn === 'b' && myRole === 'white')) return;
 
-        // Yurishni tekshirish (nuqta bor yoki dushman toshi bor katak bo'lsa)
         let $target = $('#board .square-' + square);
         if (selectedSquare && ($target.find('.dot').length > 0 || $target.hasClass('enemy-target'))) {
             makeMove(selectedSquare, square);
@@ -252,10 +255,31 @@
 
     function updateStatus() {
         let status = game.turn() === 'w' ? "OQLAR NAVBATI" : "QORALAR NAVBATI";
+        
+        // Shoh katagini tozalash
+        $('#board .square-55d63').removeClass('king-check');
+
+        if (game.in_check()) {
+            status += "<br><span style='color: #e74c3c; font-size: 14px;'>SHOH XAVF OSTIDA!</span>";
+            
+            // Shoh qayerdaligini topish va rangini o'zgartirish
+            const turn = game.turn();
+            const boardMatrix = game.board();
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const p = boardMatrix[i][j];
+                    if (p && p.type === 'k' && p.color === turn) {
+                        const square = String.fromCharCode(97 + j) + (8 - i);
+                        $('#board .square-' + square).addClass('king-check');
+                    }
+                }
+            }
+        }
+
         if (game.in_checkmate()) status = "O'YIN TUGADI (MOT)";
         else if (game.in_draw()) status = "DURANG";
-        else if (game.in_check()) status += " (SHOH)";
-        document.getElementById('status').innerText = status;
+        
+        document.getElementById('status').innerHTML = status;
     }
 
     function resignGame() {
