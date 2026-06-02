@@ -120,6 +120,11 @@
         #resign-btn { flex: 1; display: none; background: #e74c3c; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         #chat-toggle-btn { flex: 1; display: none; background: #3498db; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         
+        /* Yangi qo'shilgan elementlar stillari */
+        #draw-btn { flex: 1; display: none; background: #f39c12; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
+        #history-container { width: 95vw; max-width: 400px; background: #2c2c2c; border: 1px solid #444; border-radius: 8px; margin-top: 10px; padding: 8px; display: none; font-size: 13px; max-height: 60px; overflow-y: auto; text-align: center; color: #aaa; }
+        .highlight-last { box-shadow: inset 0 0 10px 3px rgba(241, 196, 15, 0.6) !important; }
+
         /* Chat modali */
         #chat-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 600; flex-direction: column; justify-content: flex-end; }
         .chat-container { background: #2c2c2c; width: 100%; max-height: 70vh; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; flex-direction: column; border-top: 3px solid #3498db; }
@@ -175,6 +180,7 @@
     <div class="top-btns">
         <div class="circle-btn" onclick="openProfile()">👤</div>
         <div class="circle-btn" onclick="document.getElementById('lang-setup-modal').style.display = 'flex';">🌐</div>
+        <div class="circle-btn" id="sound-toggle-btn" onclick="toggleSoundMaster()">🔊</div>
         <div class="circle-btn" onclick="toggleLeaderboard(true)">🏆</div>
         <div class="circle-btn" onclick="toggleRules(true)">❓</div>
     </div>
@@ -252,9 +258,11 @@
 </div>
 
 <div id="board" style="display:none;"></div>
+<div id="history-container"></div>
 
 <div class="game-controls">
     <button id="resign-btn" onclick="resignGame()">🚩 Taslim bo'lish</button>
+    <button id="draw-btn" onclick="offerDraw()">🤝 Durang</button>
     <button id="chat-toggle-btn" onclick="toggleChat(true)">💬 Chat</button>
 </div>
 
@@ -343,6 +351,8 @@
             drawText: "DURANG",
             vsBotBtn: "🤖 BOT BILAN O'YNASH",
             botName: "Kuchli Bot",
+            drawOffer: "Raqib durang taklif qildi. Qabul qilasizmi?",
+            drawReject: "Durang taklifi rad etildi.",
             ranks: [
                 { min: 0, name: "Yangi o'yinchi", icon: "🌱" },
                 { min: 10, name: "Havaskor", icon: "🥉" },
@@ -392,6 +402,8 @@
             drawText: "DRAW",
             vsBotBtn: "🤖 PLAY VS BOT",
             botName: "Advanced Bot",
+            drawOffer: "Opponent offered a draw. Do you accept?",
+            drawReject: "Draw offer rejected.",
             ranks: [
                 { min: 0, name: "New Player", icon: "🌱" },
                 { min: 10, name: "Amateur", icon: "🥉" },
@@ -441,6 +453,8 @@
             drawText: "НИЧЬЯ",
             vsBotBtn: "🤖 ИГРАТЬ С БОТОМ",
             botName: "Сильный Бот",
+            drawOffer: "Соперник предложил ничью. Принять?",
+            drawReject: "Предложение ничьей отклонено.",
             ranks: [
                 { min: 0, name: "Новый игрок", icon: "🌱" },
                 { min: 10, name: "Любитель", icon: "🥉" },
@@ -452,6 +466,7 @@
     };
 
     let currentLang = localStorage.getItem('shashka_lang') || 'uz';
+    let soundEnabled = true;
 
     const firebaseConfig = {
         apiKey: "AIzaSyDvuBmuKfEPnd-ocDxzbzmfdCRLZUXnEO0",
@@ -467,7 +482,7 @@
     let userId, currentName;
     let myRole = ''; 
     let gameId = '';
-    let isVsBot = false; // Bot rejimi flagi
+    let isVsBot = false; 
     let game = new Chess();
     let board = null;
     let selectedSquare = null;
@@ -650,8 +665,20 @@
     }
 
     function playSound(id) {
+        if(!soundEnabled) return;
         const sound = document.getElementById(id);
         if (sound) { sound.pause(); sound.currentTime = 0; sound.play().catch(() => {}); }
+    }
+
+    function toggleSoundMaster() {
+        soundEnabled = !soundEnabled;
+        document.getElementById('sound-toggle-btn').innerText = soundEnabled ? "🔊" : "🔇";
+        const lobbyMusic = document.getElementById('lobby-music');
+        if(!soundEnabled) {
+            lobbyMusic.pause();
+        } else if(!inGame && musicStarted) {
+            lobbyMusic.play().catch(() => {});
+        }
     }
 
     function toggleRules(show) {
@@ -740,8 +767,10 @@
         document.getElementById('winner-msg').innerText = message;
         document.getElementById('game-over-overlay').style.display = 'flex';
         if (won) playSound('winner-sound'); else playSound('loser-sound');
-        updateStats(won);
+        if (won !== 'draw') updateStats(won);
         if (gameId && !isVsBot) {
+            db.ref('games/' + gameId).off();
+            db.ref('games/' + gameId + '/clocks').off();
             db.ref('games/' + gameId).remove();
             db.ref('chats/' + gameId).remove();
         }
@@ -758,8 +787,10 @@
         if (exitInt) clearInterval(exitInt);
         document.getElementById('game-over-overlay').style.display = 'none';
         document.getElementById('board').style.display = 'none';
+        document.getElementById('history-container').style.display = 'none';
         document.getElementById('status-container').style.display = 'none';
         document.getElementById('resign-btn').style.display = 'none';
+        document.getElementById('draw-btn').style.display = 'none';
         document.getElementById('chat-toggle-btn').style.display = 'none';
         
         inGame = false;
@@ -769,14 +800,14 @@
         
         document.getElementById('menu').style.display = 'flex';
         updateMyRankInMenu();
-        if (musicStarted) {
+        if (musicStarted && soundEnabled) {
             const lobbyMusic = document.getElementById('lobby-music');
             lobbyMusic.play().catch(() => {});
         }
     }
 
     function toggleChat(show) {
-        if (isVsBot) return; // Bot bilan chat yo'q
+        if (isVsBot) return; 
         document.getElementById('chat-modal').style.display = show ? 'flex' : 'none';
         if (show) {
             setTimeout(() => {
@@ -829,6 +860,25 @@
         } else {
             $square.append('<div class="dot"></div>');
         }
+    }
+
+    function highlightLastMove(from, to) {
+        $('#board .square-55d63').removeClass('highlight-last');
+        if(from && to) {
+            $('#board .square-' + from).addClass('highlight-last');
+            $('#board .square-' + to).addClass('highlight-last');
+        }
+    }
+
+    function updateMoveHistory() {
+        const history = game.history();
+        let html = "";
+        for(let i=0; i<history.length; i+=2) {
+            html += `<b>${Math.floor(i/2)+1}.</b> ${history[i]} ` + (history[i+1] ? ` ${history[i+1]} ` : "");
+        }
+        const container = document.getElementById('history-container');
+        container.innerHTML = html || "...";
+        container.scrollTop = container.scrollHeight;
     }
 
     function onSquareClick (square) {
@@ -894,9 +944,11 @@
         removeMarkers();
         selectedSquare = null;
         board.position(game.fen());
+        highlightLastMove(from, to);
+        updateMoveHistory();
         
         if (!isVsBot) {
-            db.ref('games/' + gameId).update({ fen: game.fen() });
+            db.ref('games/' + gameId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
             db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
         }
         
@@ -1011,7 +1063,6 @@
         }
         let moves = gameObj.moves();
         
-        // Murakkablikni oshirish uchun hujum va strategik yurishlarni saralash
         moves.sort(() => 0.5 - Math.random()); 
 
         if (isMaximizing) {
@@ -1047,7 +1098,6 @@
         let bestMove = null;
         let maxEval = -Infinity;
         
-        // Chuqurlik 3 qilib belgilandi (Mobil va brauzer qotmasligi hamda maksimal aqlli bo'lishi uchun eng ideal balans)
         const depth = 3; 
 
         for (let move of moves) {
@@ -1060,9 +1110,12 @@
             }
         }
         
+        let oldFen = game.fen();
         const moveObj = game.move(bestMove || moves[0]);
         if (moveObj.captured) playSound('capture-sound'); else playSound('move-sound');
         board.position(game.fen());
+        highlightLastMove(moveObj.from, moveObj.to);
+        updateMoveHistory();
         updateStatus();
     }
 
@@ -1081,12 +1134,16 @@
         
         document.getElementById('menu').style.display = 'none';
         document.getElementById('board').style.display = 'block';
+        document.getElementById('history-container').style.display = 'block';
         document.getElementById('status-container').style.display = 'flex';
         document.getElementById('resign-btn').style.display = 'block';
-        document.getElementById('chat-toggle-btn').style.display = 'none'; // Botda chat bo'lmaydi
+        document.getElementById('draw-btn').style.display = 'none';
+        document.getElementById('chat-toggle-btn').style.display = 'none'; 
 
         document.getElementById('clock-white').innerText = "Siz (Oq): " + formatTime(whiteTimeLeft);
         document.getElementById('clock-black').innerText = LOCALES[currentLang].botName + " (Qora): " + formatTime(blackTimeLeft);
+        
+        updateMoveHistory();
 
         const config = {
             draggable: false,
@@ -1105,6 +1162,11 @@
     }
     /* ========================================================================== */
 
+    function offerDraw() {
+        if(isVsBot || gameOver) return;
+        db.ref('games/' + gameId).update({ event: 'draw_offer', sender: userId });
+    }
+
     function startGame(id, role) {
         isVsBot = false;
         inGame = true;
@@ -1121,14 +1183,17 @@
         
         document.getElementById('menu').style.display = 'none';
         document.getElementById('board').style.display = 'block';
+        document.getElementById('history-container').style.display = 'block';
         document.getElementById('status-container').style.display = 'flex';
         document.getElementById('resign-btn').style.display = 'block';
+        document.getElementById('draw-btn').style.display = 'block';
         document.getElementById('chat-toggle-btn').style.display = 'block';
 
         document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
         document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
 
         setupChatSystem();
+        updateMoveHistory();
 
         const config = {
             draggable: false,
@@ -1146,7 +1211,9 @@
         db.ref('games/' + gameId).on('value', (snap) => {
             if (isVsBot) return;
             const data = snap.val();
-            if (data && data.fen && data.fen !== game.fen()) {
+            if (!data) return;
+
+            if (data.fen && data.fen !== game.fen()) {
                 const oldPieceCount = game.fen().split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
                 game.load(data.fen);
                 const newPieceCount = data.fen.split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
@@ -1154,10 +1221,27 @@
                 if (newPieceCount < oldPieceCount) playSound('capture-sound'); else playSound('move-sound');
                 
                 board.position(data.fen);
+                highlightLastMove(data.lastFrom, data.lastTo);
+                updateMoveHistory();
                 updateStatus();
             }
-            if (data && data.event === 'resign') {
+            if (data.event === 'resign') {
                 finishGame(true, LOCALES[currentLang].opponentResigned);
+            }
+            if (data.event === 'draw_offer' && data.sender !== userId) {
+                db.ref('games/' + gameId).update({ event: 'none' });
+                if (confirm(LOCALES[currentLang].drawOffer)) {
+                    db.ref('games/' + gameId).update({ event: 'draw_accept' });
+                } else {
+                    db.ref('games/' + gameId).update({ event: 'draw_reject' });
+                }
+            }
+            if (data.event === 'draw_accept') {
+                finishGame('draw', LOCALES[currentLang].drawText);
+            }
+            if (data.event === 'draw_reject' && data.sender === userId) {
+                db.ref('games/' + gameId).update({ event: 'none' });
+                alert(LOCALES[currentLang].drawReject);
             }
         });
 
@@ -1206,7 +1290,7 @@
         } else if (game.in_draw()) {
             status = LOCALES[currentLang].drawText;
             document.getElementById('status').innerHTML = status;
-            finishGame(false, LOCALES[currentLang].drawText);
+            finishGame('draw', LOCALES[currentLang].drawText);
             return;
         }
         
@@ -1264,7 +1348,7 @@
 
     let musicStarted = false;
     function handleInteraction() {
-        if (!musicStarted && !inGame) {
+        if (!musicStarted && !inGame && soundEnabled) {
             const lobbyMusic = document.getElementById('lobby-music');
             lobbyMusic.play().catch(() => {}); musicStarted = true;
         }
