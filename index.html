@@ -718,8 +718,11 @@
                 document.getElementById('clock-white').innerText = whiteLabel + formatTime(whiteTimeLeft);
                 document.getElementById('clock-black').innerText = blackLabel + formatTime(blackTimeLeft);
                 
-                if (!isVsBot && gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
+                if (gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
                     db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
+                } else if (isVsBot) {
+                    // Bot o'ynayotganda ham firebase tizimida yoki local holatda vaqt yangilanadi
+                    db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 }
 
                 if (whiteTimeLeft <= 0) {
@@ -773,6 +776,9 @@
             db.ref('games/' + gameId + '/clocks').off();
             db.ref('games/' + gameId).remove();
             db.ref('chats/' + gameId).remove();
+        }
+        if (isVsBot) {
+            db.ref('bot_games/' + userId).remove();
         }
         db.ref('presence/' + userId).update({ inGame: false });
         let timeLeft = 10;
@@ -950,6 +956,9 @@
         if (!isVsBot) {
             db.ref('games/' + gameId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
             db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
+        } else {
+            db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
+            db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
         }
         
         updateStatus();
@@ -1116,6 +1125,10 @@
         board.position(game.fen());
         highlightLastMove(moveObj.from, moveObj.to);
         updateMoveHistory();
+        
+        db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: moveObj.from, lastTo: moveObj.to });
+        db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
+
         updateStatus();
     }
 
@@ -1131,6 +1144,8 @@
         blackTimeLeft = 600;
 
         db.ref('presence/' + userId).update({ inGame: true });
+        db.ref('bot_games/' + userId).set({ fen: game.fen(), player: currentName, ts: Date.now() });
+        db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
         
         document.getElementById('menu').style.display = 'none';
         document.getElementById('board').style.display = 'block';
