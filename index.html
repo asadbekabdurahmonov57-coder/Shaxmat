@@ -14,16 +14,84 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
-        body { 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            height: 100vh; background: #1a1a1a; margin: 0; font-family: sans-serif; color: white; overflow: hidden;
+        /* --- LONG PRESS & COPY PREVENTION --- */
+        body, *, .btn, .rules-text, .modal-content, p, h1, h2, h3, div {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        input, textarea {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
 
-        #status-container { margin-bottom: 10px; text-align: center; display: none; }
-        #status { 
-            font-size: 18px; font-weight: 900; background: #2c2c2c; padding: 10px 25px; 
-            border-radius: 30px; border: 2px solid #444; color: #f1c40f; text-transform: uppercase;
+        /* --- LOADING PROGRESS BAR CSS --- */
+        #loading-screen {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #1a1a1a; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1000;
         }
+        .progress-container { width: 70%; height: 12px; background: #333; border-radius: 10px; position: relative; margin-top: 20px; }
+        .progress-bar { width: 0%; height: 100%; background: #2ecc71; box-shadow: 0 0 15px #2ecc71; transition: width 0.3s ease; position: relative; border-radius: 10px; }
+        .progress-bar::after { content: '♟️'; position: absolute; right: -15px; top: -15px; font-size: 24px; filter: drop-shadow(0 0 5px #2ecc71); }
+        #loading-text { color: white; font-size: 18px; font-family: sans-serif; letter-spacing: 2px; font-weight: 900; }
+
+        /* --- TIL TANLASH MODALI --- */
+        #lang-setup-modal { 
+            display: flex;
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: #1a1a1a; 
+            z-index: 1200; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #lang-setup-modal h2 { margin-bottom: 25px; }
+
+        /* --- ISM KIRITISH MODALI --- */
+        #name-setup-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 1100; flex-direction: column; align-items: center; justify-content: center; }
+        .input-field { background: #2c2c2c; border: 2px solid #f1c40f; color: white; padding: 15px; border-radius: 10px; width: 80%; font-size: 18px; text-align: center; margin-bottom: 20px; outline: none; }
+
+        /* --- ASOSIY CSS QISMI --- */
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: #1a1a1a; margin: 0; font-family: sans-serif; overflow: hidden; color: white; }
+        
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #menu h1 { color: #f1c40f; margin-bottom: 20px; font-weight: 900; }
+        .top-btns { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-between; align-items: center; gap: 5px; }
+        .circle-btn { width: 45px; height: 45px; font-size: 22px; cursor: pointer; background: #2c2c2c; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid #f1c40f; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .modal-content { width: 90%; max-width: 400px; background: #2c2c2c; border-radius: 20px; padding: 25px; text-align: center; border: 2px solid #f1c40f; position: relative; }
+        .edit-name-btn { position: absolute; right: 20px; top: 65px; cursor: pointer; font-size: 20px; }
+        
+        .rank-tag { background: #f1c40f; color: black; padding: 5px 15px; border-radius: 20px; font-weight: 900; font-size: 14px; margin-top: 10px; display: inline-block; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .stat-box { background: #1a1a1a; padding: 10px; border-radius: 10px; border: 1px solid #444; }
+
+        .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; font-size: 18px; margin: 10px; cursor: pointer; width: 80%; text-transform: uppercase; }
+        #online-list { width: 80%; max-height: 200px; overflow-y: auto; background: #2c2c2c; border-radius: 10px; padding: 10px; font-weight: 700; margin-top: 10px; }
+        .user-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #444; align-items: center; }
+        .invite-btn { background: #2ecc71; color: white; border: none; padding: 7px 12px; border-radius: 5px; cursor: pointer; font-weight: 900; }
+        
+        #status-container { display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; width: 100%; }
+        #status { font-size: 4.5vw; font-weight: 900; text-transform: uppercase; text-align: center; background: #2c2c2c; padding: 8px 20px; border-radius: 30px; min-width: 200px; border: 2px solid #444; color: #f1c40f; }
+        #clocks-container { display: flex; justify-content: space-around; width: 95vw; max-width: 450px; margin-top: 8px; font-family: monospace; font-size: 4vw; font-weight: 900; }
+        .clock-box { background: #2c2c2c; padding: 5px 12px; border-radius: 8px; border: 1px solid #555; min-width: 110px; text-align: center; }
+        .active-clock { border-color: #f1c40f; color: #f1c40f; box-shadow: 0 0 8px rgba(241, 196, 15, 0.4); }
         
         #board { width: 95vw; max-width: 400px; margin: 10px; border: 5px solid #3e2723; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         
@@ -48,14 +116,23 @@
         
         .square-55d63 { display: flex; align-items: center; justify-content: center; position: relative; }
 
-        .btn { background: #f1c40f; color: black; border: none; padding: 15px 30px; border-radius: 10px; font-weight: 900; cursor: pointer; width: 80%; margin: 10px; text-transform: uppercase; }
+        .game-controls { display: flex; gap: 10px; width: 95vw; max-width: 400px; margin-top: 15px; }
+        #resign-btn { flex: 1; display: none; background: #e74c3c; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
+        #chat-toggle-btn { flex: 1; display: none; background: #3498db; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         
-        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #online-list { width: 80%; max-height: 250px; overflow-y: auto; background: #2c2c2c; border-radius: 10px; padding: 10px; margin-top: 10px; border: 1px solid #444; }
-        .user-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #444; align-items: center; width: 100%; }
-        .invite-btn { background: #2ecc71; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        
-        #resign-btn { background: #e74c3c; color: white; padding: 12px 25px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; display: none; margin-top: 10px; }
+        /* Chat modali */
+        #chat-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 600; flex-direction: column; justify-content: flex-end; }
+        .chat-container { background: #2c2c2c; width: 100%; max-height: 70vh; border-top-left-radius: 20px; border-top-right-radius: 20px; display: flex; flex-direction: column; border-top: 3px solid #3498db; }
+        .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #444; font-weight: 900; color: #3498db; }
+        .chat-close { cursor: pointer; font-size: 20px; color: white; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; max-height: 40vh; min-height: 250px; }
+        .chat-msg { max-width: 75%; padding: 8px 14px; border-radius: 15px; font-size: 14px; word-break: break-word; line-height: 1.4; }
+        .msg-my { background: #3498db; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg-opp { background: #444; color: white; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg-sender { font-size: 11px; color: #f1c40f; margin-bottom: 2px; display: block; font-weight: bold; }
+        .chat-input-area { display: flex; padding: 10px; gap: 8px; border-top: 1px solid #444; background: #1a1a1a; }
+        .chat-input { flex: 1; background: #2c2c2c; border: 1px solid #555; border-radius: 20px; padding: 10px 15px; color: white; outline: none; font-size: 15px; }
+        .chat-send-btn { background: #3498db; border: none; color: white; padding: 0 18px; border-radius: 20px; font-weight: bold; cursor: pointer; }
 
         #promotion-menu {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -64,35 +141,309 @@
         .promo-options { display: flex; gap: 15px; background: #2c2c2c; padding: 20px; border-radius: 15px; border: 2px solid #f1c40f; }
         .promo-piece { width: 60px; height: 60px; cursor: pointer; transition: transform 0.2s; }
         .promo-piece:hover { transform: scale(1.2); }
+
+        #game-over-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 500; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        #winner-msg { font-size: 9vw; font-weight: 900; color: #f1c40f; margin-bottom: 15px; padding: 0 10px; }
+
+        /* --- TELEGRAM BLOCKER CSS --- */
+        #tg-blocker { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 9999; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
+        
+        .rules-text { text-align: left; font-size: 14px; line-height: 1.5; max-height: 40vh; overflow-y: auto; background: #1a1a1a; padding: 15px; border-radius: 10px; border: 1px solid #444; margin: 15px 0; }
     </style>
 </head>
-<body>
+<body onclick="handleInteraction()" oncontextmenu="return false;">
+
+<div id="tg-blocker">
+    <h1 style="color: #e74c3c; font-size: 28px; margin-bottom: 15px;">⚠️ CHЕKLOV / RESTRICTION</h1>
+    <p style="font-size: 18px; line-height: 1.6;">Ushbu o'yin faqat <b>Telegram</b> ilovasi ichida ishlashga mo'ljallangan!<br>Iltimos, o'yinni Telegram bot orqali ishga tushiring.</p>
+    <p style="color: #aaa; margin-top: 20px; font-size: 14px;">This game only works inside the Telegram App.<br>Эта игра работает только внутри Telegram.</p>
+</div>
+
+<div id="loading-screen">
+    <div id="loading-text">YUKLANMOQDA...</div>
+    <div class="progress-container"><div class="progress-bar" id="bar"></div></div>
+</div>
+
+<div id="lang-setup-modal">
+    <h2 style="color:#f1c40f; font-weight:900;">TILNI TANLANG / SELECT LANGUAGE / ВЫБЕРИТЕ ЯЗЫК</h2>
+    <button class="btn" onclick="event.stopPropagation(); setLanguage('uz')">Oʻzbek</button>
+    <button class="btn" onclick="event.stopPropagation(); setLanguage('en')">English</button>
+    <button class="btn" onclick="event.stopPropagation(); setLanguage('ru')">Русский</button>
+</div>
 
 <div id="menu">
-    <h1 style="color:#f1c40f; font-weight: 900;">♟️ CHESS ONLINE</h1>
-    <p id="my-name-display" style="font-weight: bold;">Yuklanmoqda...</p>
-    <h3 style="margin-top: 20px;">🟢 ONLAYN O'YINCHILAR</h3>
+    <div class="top-btns">
+        <div class="circle-btn" onclick="openProfile()">👤</div>
+        <div class="circle-btn" onclick="document.getElementById('lang-setup-modal').style.display = 'flex';">🌐</div>
+        <div class="circle-btn" onclick="toggleLeaderboard(true)">🏆</div>
+        <div class="circle-btn" onclick="toggleRules(true)">❓</div>
+    </div>
+    <h1>♟️ CHESS ONLINE</h1>
+    <p id="my-name-display" style="font-weight: 800;">...</p>
+    <div id="my-rank-short" class="rank-tag">Yangi o'yinchi</div>
+    
+    <h3 id="online-players-title" style="margin-top: 20px;">🟢 Onlayn o'yinchilar:</h3>
     <div id="online-list">Hozircha hech kim yo'q...</div>
     <br>
-    <button class="btn" onclick="exitApp()">Chiqish</button>
+    <button id="exit-btn" class="btn" onclick="closeTelegramApp()">Chiqish</button>
+    
+    <div style="margin-top: 15px; font-size: 13px; color: #777; letter-spacing: 1px;">Yaratuvchi: <span style="color: #f1c40f; font-weight: bold;">𝗔𝗯𝗱𝘂𝗿𝗮𝗵𝗺𝗼𝗻𝗼𝘃 ❙❙</span></div>
+</div>
+
+<div id="name-setup-modal">
+    <h2 id="name-title" style="color:#f1c40f; font-weight:900;">ISMINGIZNI KIRITING</h2>
+    <input type="text" id="user-name-input" class="input-field" placeholder="Nikneym..." maxlength="15">
+    <button id="name-save-btn" class="btn" onclick="saveUserName()">SAQLASH</button>
+</div>
+
+<div id="profile-modal" class="modal">
+    <div class="modal-content">
+        <span class="edit-name-btn" onclick="openEditNameModal()">✏️</span>
+        <h2 id="prof-title" style="margin:0; color:#f1c40f;">PROFIL</h2>
+        <h3 id="prof-name" style="margin: 10px 0;">Ism</h3>
+        <div id="prof-rank" class="rank-tag">Rank</div>
+        <div class="stats-grid">
+            <div class="stat-box"><div style="color:#2ecc71; font-weight:900;" id="prof-wins">0</div><span id="label-wins">G'alaba</span></div>
+            <div class="stat-box"><div style="color:#e74c3c; font-weight:900;" id="prof-loss">0</div><span id="label-losses">Mag'lubiyat</span></div>
+        </div>
+        <p id="next-rank-info" style="font-size: 12px; margin-top: 15px; color: #aaa;"></p>
+        <button id="prof-close-btn" class="btn" onclick="closeProfile()">Yopish</button>
+    </div>
+</div>
+
+<div id="edit-name-modal" class="modal">
+    <div class="modal-content">
+        <h2 style="color:#f1c40f;" id="edit-title-label">YANGI ISM KIRITING</h2>
+        <input type="text" id="edit-name-input" class="input-field" maxlength="15">
+        <button class="btn" onclick="saveEditedName()">SAQLASH</button>
+        <button class="btn" style="background:#555; color:white;" onclick="closeEditNameModal()">YOPISH</button>
+    </div>
+</div>
+
+<div id="leaderboard-modal" class="modal">
+    <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+        <h2 id="lead-title" style="font-weight: 900; color:#f1c40f;">🏆 Eng yaxshilar</h2>
+        <div id="leaderboard-list"></div>
+        <button id="lead-close-btn" class="btn" onclick="toggleLeaderboard(false)">Yopish</button>
+    </div>
+</div>
+
+<div id="rules-modal" class="modal">
+    <div class="modal-content">
+        <h2 id="rules-title" style="font-weight: 900; color:#f1c40f;">❓ O'yin qoidalari</h2>
+        <div id="rules-content" class="rules-text"></div>
+        <button id="rules-close-btn" class="btn" onclick="toggleRules(false)">Yopish</button>
+    </div>
 </div>
 
 <div id="promotion-menu">
-    <h2 style="color:#f1c40f; text-align: center; text-transform: uppercase;">Toshni tanlang</h2>
+    <h2 id="promo-title-label" style="color:#f1c40f; text-align: center; text-transform: uppercase;">Toshni tanlang</h2>
     <div class="promo-options" id="promo-list"></div>
 </div>
 
-<div id="status-container">
+<div id="status-container" style="display:none;">
     <div id="status">OQLAR NAVBATI</div>
+    <div id="clocks-container">
+        <div id="clock-white" class="clock-box">Oq: 10:00</div>
+        <div id="clock-black" class="clock-box">Qora: 10:00</div>
+    </div>
 </div>
 
-<div id="board"></div>
+<div id="board" style="display:none;"></div>
 
-<button id="resign-btn" onclick="resignGame()">🚩 Taslim bo'lish</button>
+<div class="game-controls">
+    <button id="resign-btn" onclick="resignGame()">🚩 Taslim bo'lish</button>
+    <button id="chat-toggle-btn" onclick="toggleChat(true)">💬 Chat</button>
+</div>
+
+<div id="chat-modal" onclick="toggleChat(false)">
+    <div class="chat-container" onclick="event.stopPropagation()">
+        <div class="chat-header">
+            <span>CHАT</span>
+            <span class="chat-close" onclick="toggleChat(false)">✕</span>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Xabar yozing..." maxlength="100" onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button class="chat-send-btn" onclick="sendChatMessage()">➡️</button>
+        </div>
+    </div>
+</div>
+
+<div id="game-over-overlay">
+    <div id="winner-msg"></div>
+    <div id="exit-timer" style="color: white; font-weight: 800;">Menyuga qaytish: 10</div>
+    <button id="fast-menu-btn" class="btn" style="background: #2ecc71; color: white; margin-top: 15px;" onclick="goToMenuImmediately()">Tezkor qaytish</button>
+</div>
+
+<audio id="capture-sound" src="tosh yeyishi.mp3" preload="auto"></audio>
+<audio id="move-sound" src="oddiy yurish.mp3" preload="auto"></audio>
+<audio id="winner-sound" src="winner.mp3" preload="auto"></audio>
+<audio id="loser-sound" src="loser.mp3" preload="auto"></audio>
+<audio id="lobby-music" src="kutish.mp3" preload="auto" loop></audio> 
 
 <script>
     const tg = window.Telegram.WebApp;
+    
+    if (!tg || !tg.initData || tg.initData === "") {
+        document.getElementById('tg-blocker').style.display = 'flex';
+        if(document.getElementById('lang-setup-modal')) document.getElementById('lang-setup-modal').style.display = 'none';
+        throw new Error("O'yin faqat Telegram ichida ishlaydi!");
+    }
+
     tg.expand();
+
+    function closeTelegramApp() {
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.close();
+        }
+    }
+
+    const LOCALES = {
+        uz: {
+            loading: "YUKLANMOQDA...",
+            enterName: "ISMINGIZNI KIRITING",
+            placeholder: "Nikneym...",
+            save: "SAQLASH",
+            welcome: "👋 Salom, ",
+            onlinePlayers: "🟢 Onlayn o'yinchilar:",
+            noPlayers: "Hozircha hech kim yo'q...",
+            exit: "Chiqish",
+            profile: "PROFIL",
+            wins: "G'alaba",
+            losses: "Mag'lubiyat",
+            close: "Yopish",
+            bestPlayers: "🏆 Eng yaxshilar",
+            invite: "🎮 Taklif",
+            whiteTurn: "OQLAR NAVBATI",
+            blackTurn: "QORALAR NAVBATI",
+            resign: "🚩 Taslim bo'lish",
+            menuReturn: "Menyuga qaytish: ",
+            nameAlert: "Ism kamida 3 ta harf bo'lsin!",
+            editPrompt: "Yangi ismni kiriting:",
+            resignConfirm: "Taslim bo'lasizmi?",
+            opponentResigned: "Raqib taslim bo'ldi!",
+            youResigned: "Siz taslim bo'ldingiz!",
+            lostNoPieces: "O'yin tugadi (Mot) yoki sizda yurish qolmadi!",
+            youWon: "Siz g'olib bo'ldingiz!",
+            nextRank: "Keyingi rank",
+            forNextRank: "uchun yana",
+            winsNeeded: "ta g'alaba kerak.",
+            maxRank: "Siz eng yuqori darajadasiz!",
+            inviteSent: "taklif qildi. Qabul qilasizmi?",
+            timeOutLoss: "Vaqtingiz tugadi! Siz mag'lub bo'ldingiz.",
+            timeOutWin: "Raqibning vaqti tugadi! Siz yutdingiz.",
+            rulesTitle: "❓ O'yin qoidalari",
+            rulesText: "1. Shaxmat 8x8 o'lchamli doskada o'ynaladi.<br><br>2. Oqlar birinchi bo'lib yurishadi.<br><br>3. Maqsad raqib shohini mot qilish, ya'ni uni qochib qutula olmaydigan qilib hujum ostiga olish.<br><br>4. Har bir tosh (Piyoda, Rux, Ot, Fil, Farzin, Shoh) o'z qoidasiga ko'ra o'ziga xos tarzda harakatlanadi.<br><br>5. Piyoda oxirgi chiziqqa yetib borganida istalgan kuchliroq toshga (Farzin, Rux, Fil, Ot) almashishi mumkin.<br><br>6. Har bir o'yinchiga o'yin boshida 10 daqiqa vaqt beriladi. Vaqti tugagan o'yinchi mag'lub hisoblanadi.",
+            promoText: "Toshni tanlang",
+            checkText: "<br><span style='color: #e74c3c; font-size: 14px;'>SHOH XAVF OSTIDA!</span>",
+            mateText: "O'YIN TUGADI (MOT)",
+            drawText: "DURANG",
+            ranks: [
+                { min: 0, name: "Yangi o'yinchi", icon: "🌱" },
+                { min: 10, name: "Havaskor", icon: "🥉" },
+                { min: 25, name: "Usta", icon: "🥈" },
+                { min: 50, name: "Grossmeyster", icon: "🥇" },
+                { min: 100, name: "Shaxmat Qiroli", icon: "👑" }
+            ]
+        },
+        en: {
+            loading: "LOADING...",
+            enterName: "ENTER YOUR NAME",
+            placeholder: "Nickname...",
+            save: "SAVE",
+            welcome: "👋 Hello, ",
+            onlinePlayers: "🟢 Online Players:",
+            noPlayers: "No one here yet...",
+            exit: "Exit",
+            profile: "PROFILE",
+            wins: "Wins",
+            losses: "Losses",
+            close: "Close",
+            bestPlayers: "🏆 Leaderboard",
+            invite: "🎮 Invite",
+            whiteTurn: "WHITE'S TURN",
+            blackTurn: "BLACK'S TURN",
+            resign: "🚩 Resign",
+            menuReturn: "Return to menu: ",
+            nameAlert: "Name must be at least 3 characters!",
+            editPrompt: "Enter new name:",
+            resignConfirm: "Do you want to resign?",
+            opponentResigned: "Opponent resigned!",
+            youResigned: "You resigned!",
+            lostNoPieces: "Game Over (Checkmate) or no moves left!",
+            youWon: "You won!",
+            nextRank: "Next rank",
+            forNextRank: "needs",
+            winsNeeded: "more wins.",
+            maxRank: "You are at the highest rank!",
+            inviteSent: "invited you. Do you accept?",
+            timeOutLoss: "Time out! You lost.",
+            timeOutWin: "Opponent time out! You won.",
+            rulesTitle: "❓ Game Rules",
+            rulesText: "1. Chess is played on an 8x8 grid board.<br><br>2. White moves first.<br><br>3. The goal is to checkmate the opponent's king, meaning it is under attack and cannot escape.<br><br>4. Each piece (Pawn, Rook, Knight, Bishop, Queen, King) moves in a specific unique way.<br><br>5. A pawn reaching the furthest row can be promoted to a Queen, Rook, Bishop, or Knight.<br><br>6. Each player starts with 10 minutes. Running out of time results in a loss.",
+            promoText: "Choose a piece",
+            checkText: "<br><span style='color: #e74c3c; font-size: 14px;'>KING IN CHECK!</span>",
+            mateText: "GAME OVER (CHECKMATE)",
+            drawText: "DRAW",
+            ranks: [
+                { min: 0, name: "New Player", icon: "🌱" },
+                { min: 10, name: "Amateur", icon: "🥉" },
+                { min: 25, name: "Master", icon: "🥈" },
+                { min: 50, name: "Grandmaster", icon: "🥇" },
+                { min: 100, name: "Chess King", icon: "👑" }
+            ]
+        },
+        ru: {
+            loading: "ЗАГРУЗКА...",
+            enterName: "ВВЕДИТЕ СВОЕ ИМЯ",
+            placeholder: "Никнейм...",
+            save: "СОХРАНИТЬ",
+            welcome: "👋 Привет, ",
+            onlinePlayers: "🟢 Игроки онлайн:",
+            noPlayers: "Никого еще нет...",
+            exit: "Выход",
+            profile: "ПРОФИЛЬ",
+            wins: "Победы",
+            losses: "Поражения",
+            close: "Закрыть",
+            bestPlayers: "🏆 Лидеры",
+            invite: "🎮 Пригласить",
+            whiteTurn: "ХОД БЕЛЫХ",
+            blackTurn: "ХОД ЧЕРНЫХ",
+            resign: "🚩 Сдаться",
+            menuReturn: "Вернуться в меню: ",
+            nameAlert: "Имя должно содержать не менее 3 символов!",
+            editPrompt: "Введите новое имя:",
+            resignConfirm: "Вы хотите сдаться?",
+            opponentResigned: "Соперник сдался!",
+            youResigned: "Вы сдались!",
+            lostNoPieces: "Игра окончена (Мат) или у вас нет ходов!",
+            youWon: "Вы выиграли!",
+            nextRank: "Следующий ранг",
+            forNextRank: "нужно еще",
+            winsNeeded: "побед.",
+            maxRank: "У вас самый высокий ранг!",
+            inviteSent: "пригласил вас. Принять?",
+            timeOutLoss: "Время истекло! Вы проиграли.",
+            timeOutWin: "Время соперника истекло! Вы выиграли.",
+            rulesTitle: "❓ Правила игры",
+            rulesText: "1. Шахматы разыгрываются на доске размером 8х8 клеток.<br><br>2. Белые ходят первыми.<br><br>3. Цель игры — поставить мат королю соперника, то есть атаковать его так, чтобы не было спасения.<br><br>4. Каждая фигура (Пешка, Ладья, Конь, Слон, Ферзь, Король) ходит по своим уникальным правилам.<br><br>5. Пешка, достигшая противоположного края, может быть превращена в Ферзя, Ладью, Слона или Коня.<br><br>6. Каждому игроку дается 10 минут на партию. Игрок, у которого закончилось время, проигрывает.",
+            promoText: "Выберите фигуру",
+            checkText: "<br><span style='color: #e74c3c; font-size: 14px;'>КОРОЛЬ ПОД ШАХОМ!</span>",
+            mateText: "ИГРА ОКОНЧЕНА (МАТ)",
+            drawText: "НИЧЬЯ",
+            ranks: [
+                { min: 0, name: "Новый игрок", icon: "🌱" },
+                { min: 10, name: "Любитель", icon: "🥉" },
+                { min: 25, name: "Мастер", icon: "🥈" },
+                { min: 50, name: "Гроссмейстер", icon: "🥇" },
+                { min: 100, name: "Король Шахмат", icon: "👑" }
+            ]
+        }
+    };
+
+    let currentLang = localStorage.getItem('shashka_lang') || 'uz';
 
     const firebaseConfig = {
         apiKey: "AIzaSyDvuBmuKfEPnd-ocDxzbzmfdCRLZUXnEO0",
@@ -105,48 +456,349 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let userId = tg.initDataUnsafe?.user?.id.toString() || "u" + Math.floor(Math.random()*10000);
-    let currentName = tg.initDataUnsafe?.user?.first_name || "O'yinchi";
+    let userId, currentName;
     let myRole = ''; 
     let gameId = '';
     let game = new Chess();
     let board = null;
     let selectedSquare = null;
     let pendingPromotion = null;
+    let inGame = false, gameOver = false, sessionStartTime = Date.now();
+    let moveTimerInterval = null, exitInt = null;
 
-    document.getElementById('my-name-display').innerText = "👋 Salom, " + currentName;
+    let whiteTimeLeft = 600;
+    let blackTimeLeft = 600;
+    let lastClockUpdate = Date.now();
 
-    const myPres = db.ref('presence/' + userId);
-    myPres.set({ name: currentName, online: true, inGame: false });
-    myPres.onDisconnect().remove();
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        userId = tg.initDataUnsafe.user.id.toString();
+        currentName = tg.initDataUnsafe.user.first_name;
+        localStorage.setItem('shashka_userid', userId);
+        localStorage.setItem('shashka_username', currentName);
+    } else {
+        userId = localStorage.getItem('shashka_userid') || "u" + Date.now();
+        localStorage.setItem('shashka_userid', userId);
+        currentName = localStorage.getItem('shashka_username') || "";
+    }
 
-    db.ref('presence').on('value', (snap) => {
-        const list = document.getElementById('online-list');
-        list.innerHTML = '';
-        snap.forEach(c => {
-            if (c.key !== userId && c.val().online && !c.val().inGame) {
-                list.innerHTML += `<div class="user-item">
-                    <span>👤 ${c.val().name}</span> 
-                    <button class="invite-btn" onclick="invite('${c.key}')">O'YIN</button>
-                </div>`;
-            }
-        });
-    });
-
-    db.ref('invites/' + userId).on('value', (snap) => {
-        const inv = snap.val();
-        if (inv) {
-            if (confirm(inv.fromName + " taklif yubordi. Qabul qilasizmi?")) {
-                db.ref('invites/' + userId).remove();
-                startGame(inv.gameId, 'black');
-            }
+    function getDeviceModel() {
+        const ua = navigator.userAgent;
+        if (/Android/i.test(ua)) {
+            const match = ua.match(/Android\s+([^\s;]+)\s*;?\s*([^;)]+)/);
+            if (match && match[2]) return match[2].trim();
+            return "Android Device";
         }
-    });
+        if (/iPhone|iPad|iPod/i.test(ua)) return "Apple iOS Device";
+        if (/Windows/i.test(ua)) return "PC (Windows)";
+        if (/Macintosh/i.test(ua)) return "PC (MacOS)";
+        return "Noma'lum qurilma";
+    }
 
-    function invite(id) {
-        const gid = userId + "_" + id;
-        db.ref('invites/' + id).set({ fromId: userId, fromName: currentName, gameId: gid });
-        startGame(gid, 'white');
+    function openEditNameModal() {
+        document.getElementById('edit-name-input').value = currentName;
+        document.getElementById('edit-name-modal').style.display = 'flex';
+    }
+    function closeEditNameModal() {
+        document.getElementById('edit-name-modal').style.display = 'none';
+    }
+    function saveEditedName() {
+        const input = document.getElementById('edit-name-input');
+        const newName = input.value.trim();
+        if (newName && newName.length >= 3) {
+            currentName = newName;
+            localStorage.setItem('shashka_username', currentName);
+            document.getElementById('my-name-display').innerText = LOCALES[currentLang].welcome + currentName;
+            document.getElementById('prof-name').innerText = currentName;
+            updatePresence();
+            db.ref('stats/' + userId).update({ name: currentName });
+            closeEditNameModal();
+        } else {
+            alert(LOCALES[currentLang].nameAlert);
+        }
+    }
+
+    function setLanguage(lang) {
+        currentLang = lang;
+        localStorage.setItem('shashka_lang', lang);
+        document.getElementById('lang-setup-modal').style.display = 'none';
+        startLoading();
+    }
+
+    function applyLocalization() {
+        const lang = LOCALES[currentLang];
+        document.getElementById('loading-text').innerText = lang.loading;
+        document.getElementById('name-title').innerText = lang.enterName;
+        document.getElementById('user-name-input').placeholder = lang.placeholder;
+        document.getElementById('name-save-btn').innerText = lang.save;
+        document.getElementById('online-players-title').innerText = lang.onlinePlayers;
+        document.getElementById('exit-btn').innerText = lang.exit;
+        document.getElementById('prof-title').innerText = lang.profile;
+        document.getElementById('label-wins').innerText = lang.wins;
+        document.getElementById('label-losses').innerText = lang.losses;
+        document.getElementById('prof-close-btn').innerText = lang.close;
+        document.getElementById('lead-title').innerText = lang.bestPlayers;
+        document.getElementById('lead-close-btn').innerText = lang.close;
+        document.getElementById('resign-btn').innerText = lang.resign;
+        document.getElementById('edit-title-label').innerText = lang.editPrompt;
+        document.getElementById('promo-title-label').innerText = lang.promoText;
+        
+        document.getElementById('rules-title').innerText = lang.rulesTitle;
+        document.getElementById('rules-content').innerHTML = lang.rulesText;
+        document.getElementById('rules-close-btn').innerText = lang.close;
+    }
+
+    function saveUserName() {
+        const input = document.getElementById('user-name-input');
+        const name = input.value.trim();
+        if (name.length >= 3) {
+            currentName = name;
+            localStorage.setItem('shashka_username', name);
+            document.getElementById('name-setup-modal').style.display = 'none';
+            document.getElementById('menu').style.display = 'flex';
+            document.getElementById('my-name-display').innerText = LOCALES[currentLang].welcome + currentName;
+            updatePresence();
+            db.ref('stats/' + userId).update({ name: currentName });
+        } else {
+            alert(LOCALES[currentLang].nameAlert);
+        }
+    }
+
+    function startLoading() {
+        document.getElementById('loading-screen').style.display = 'flex';
+        let width = 0;
+        const bar = document.getElementById('bar');
+        applyLocalization();
+        const interval = setInterval(() => {
+            if (width >= 100) {
+                clearInterval(interval);
+                document.getElementById('loading-screen').style.display = 'none';
+                
+                if (!currentName) {
+                    document.getElementById('name-setup-modal').style.display = 'flex';
+                } else {
+                    document.getElementById('menu').style.display = 'flex';
+                    document.getElementById('my-name-display').innerText = LOCALES[currentLang].welcome + currentName;
+                    updatePresence();
+                }
+                updateMyRankInMenu();
+            } else { width += 1; bar.style.width = width + '%'; }
+        }, 20);
+    }
+
+    window.onload = function() {
+        if (!localStorage.getItem('shashka_lang')) {
+            document.getElementById('lang-setup-modal').style.display = 'flex';
+        } else {
+            document.getElementById('lang-setup-modal').style.display = 'none';
+            startLoading();
+        }
+    };
+
+    function updatePresence() {
+        if (!userId || !currentName) return;
+        const myPres = db.ref('presence/' + userId);
+        const deviceModel = getDeviceModel();
+        const timestamp = Date.now();
+        myPres.set({ name: currentName, online: true, inGame: false, device: deviceModel, lastActive: timestamp });
+        myPres.onDisconnect().update({ online: false, inGame: false, lastActive: timestamp });
+    }
+
+    function getRank(wins) {
+        const ranks = LOCALES[currentLang].ranks;
+        let currentRank = ranks[0];
+        for (let r of ranks) if (wins >= r.min) currentRank = r;
+        return currentRank;
+    }
+
+    function openProfile() {
+        db.ref('stats/' + userId).once('value', (snap) => {
+            const data = snap.val() || { wins: 0, losses: 0 };
+            const rank = getRank(data.wins || 0);
+            document.getElementById('prof-name').innerText = currentName;
+            document.getElementById('prof-wins').innerText = data.wins || 0;
+            document.getElementById('prof-loss').innerText = data.losses || 0;
+            document.getElementById('prof-rank').innerText = rank.icon + " " + rank.name;
+            const ranks = LOCALES[currentLang].ranks;
+            const nextRank = ranks.find(r => r.min > (data.wins || 0));
+            
+            document.getElementById('next-rank-info').innerText = nextRank ? 
+                `${LOCALES[currentLang].nextRank} (${nextRank.name}) ${LOCALES[currentLang].forNextRank} ${nextRank.min - data.wins} ${LOCALES[currentLang].winsNeeded}` : 
+                LOCALES[currentLang].maxRank;
+                
+            document.getElementById('profile-modal').style.display = 'flex';
+        });
+    }
+
+    function closeProfile() { document.getElementById('profile-modal').style.display = 'none'; }
+
+    function updateMyRankInMenu() {
+        db.ref('stats/' + userId).once('value', (snap) => {
+            const wins = (snap.val() && snap.val().wins) ? snap.val().wins : 0;
+            const rank = getRank(wins);
+            document.getElementById('my-rank-short').innerText = rank.icon + " " + rank.name;
+        });
+    }
+
+    function playSound(id) {
+        const sound = document.getElementById(id);
+        if (sound) { sound.pause(); sound.currentTime = 0; sound.play().catch(() => {}); }
+    }
+
+    function toggleRules(show) {
+        document.getElementById('rules-modal').style.display = show ? 'flex' : 'none';
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function startMoveTimer() {
+        clearInterval(moveTimerInterval);
+        lastClockUpdate = Date.now();
+        
+        const turn = game.turn() === 'w' ? 'white' : 'black';
+        document.getElementById('clock-white').classList.toggle('active-clock', turn === 'white');
+        document.getElementById('clock-black').classList.toggle('active-clock', turn === 'black');
+
+        moveTimerInterval = setInterval(() => {
+            if (gameOver) { clearInterval(moveTimerInterval); return; }
+            
+            const now = Date.now();
+            const delta = Math.floor((now - lastClockUpdate) / 1000);
+            if (delta >= 1) {
+                if (game.turn() === 'w') {
+                    whiteTimeLeft = Math.max(0, whiteTimeLeft - delta);
+                } else {
+                    blackTimeLeft = Math.max(0, blackTimeLeft - delta);
+                }
+                lastClockUpdate = now;
+                
+                document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
+                document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
+                
+                if (game.turn() === (myRole === 'white' ? 'w' : 'b')) {
+                    db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
+                }
+
+                if (whiteTimeLeft <= 0) {
+                    clearInterval(moveTimerInterval);
+                    finishGame(myRole === 'black', myRole === 'white' ? LOCALES[currentLang].timeOutLoss : LOCALES[currentLang].timeOutWin);
+                } else if (blackTimeLeft <= 0) {
+                    clearInterval(moveTimerInterval);
+                    finishGame(myRole === 'white', myRole === 'black' ? LOCALES[currentLang].timeOutLoss : LOCALES[currentLang].timeOutWin);
+                }
+            }
+        }, 500);
+    }
+
+    function updateStats(won) {
+        db.ref('stats/' + userId).transaction((current) => {
+            if (current === null) return { name: currentName, wins: won ? 1 : 0, losses: won ? 0 : 1 };
+            if (won) current.wins = (current.wins || 0) + 1;
+            else current.losses = (current.losses || 0) + 1;
+            current.name = currentName;
+            return current;
+        });
+    }
+
+    function toggleLeaderboard(show) {
+        const modal = document.getElementById('leaderboard-modal');
+        modal.style.display = show ? 'flex' : 'none';
+        if (show) {
+            db.ref('stats').orderByChild('wins').limitToLast(10).once('value', (snap) => {
+                const list = document.getElementById('leaderboard-list');
+                list.innerHTML = '';
+                let players = [];
+                snap.forEach(child => { players.push(child.val()); });
+                players.reverse().forEach((p, index) => {
+                    const r = getRank(p.wins || 0);
+                    list.innerHTML += `<div class="user-item"><span>${index+1}. ${p.name} <br><small>${r.icon} ${r.name}</small></span><span><b style="color:#2ecc71">W:${p.wins||0}</b></span></div>`;
+                });
+            });
+        }
+    }
+
+    function finishGame(won, message) {
+        if (gameOver) return;
+        gameOver = true;
+        clearInterval(moveTimerInterval);
+        document.getElementById('winner-msg').innerText = message;
+        document.getElementById('game-over-overlay').style.display = 'flex';
+        if (won) playSound('winner-sound'); else playSound('loser-sound');
+        updateStats(won);
+        if (gameId) {
+            db.ref('games/' + gameId).remove();
+            db.ref('chats/' + gameId).remove();
+        }
+        db.ref('presence/' + userId).update({ inGame: false });
+        let timeLeft = 10;
+        exitInt = setInterval(() => {
+            timeLeft--;
+            document.getElementById('exit-timer').innerText = LOCALES[currentLang].menuReturn + timeLeft;
+            if (timeLeft <= 0) { clearInterval(exitInt); goToMenuImmediately(); }
+        }, 1000);
+    }
+
+    function goToMenuImmediately() {
+        if (exitInt) clearInterval(exitInt);
+        document.getElementById('game-over-overlay').style.display = 'none';
+        document.getElementById('board').style.display = 'none';
+        document.getElementById('status-container').style.display = 'none';
+        document.getElementById('resign-btn').style.display = 'none';
+        document.getElementById('chat-toggle-btn').style.display = 'none';
+        
+        inGame = false;
+        gameOver = false;
+        gameId = '';
+        
+        document.getElementById('menu').style.display = 'flex';
+        updateMyRankInMenu();
+        if (musicStarted) {
+            const lobbyMusic = document.getElementById('lobby-music');
+            lobbyMusic.play().catch(() => {});
+        }
+    }
+
+    function toggleChat(show) {
+        document.getElementById('chat-modal').style.display = show ? 'flex' : 'none';
+        if (show) {
+            setTimeout(() => {
+                const container = document.getElementById('chat-messages');
+                container.scrollTop = container.scrollHeight;
+            }, 50);
+        }
+    }
+
+    function setupChatSystem() {
+        db.ref('chats/' + gameId).limitToLast(30).on('value', (snap) => {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '';
+            snap.forEach(child => {
+                const msg = child.val();
+                const isMyMsg = msg.senderId === userId;
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `chat-msg ${isMyMsg ? 'msg-my' : 'msg-opp'}`;
+                msgDiv.innerHTML = `<span class="msg-sender">${isMyMsg ? 'Siz' : msg.senderName}</span>${msg.text}`;
+                container.appendChild(msgDiv);
+            });
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if (!text) return;
+        
+        db.ref('chats/' + gameId).push({
+            senderId: userId,
+            senderName: currentName,
+            text: text,
+            ts: Date.now()
+        });
+        input.value = '';
     }
 
     function removeMarkers () {
@@ -165,7 +817,7 @@
     }
 
     function onSquareClick (square) {
-        if (game.game_over()) return;
+        if (game.game_over() || gameOver) return;
         const turn = game.turn();
         if ((turn === 'w' && myRole === 'black') || (turn === 'b' && myRole === 'white')) return;
 
@@ -199,7 +851,7 @@
     function showPromotionMenu(color) {
         const menu = document.getElementById('promotion-menu');
         const list = document.getElementById('promo-list');
-        const pieceTypes = ['q', 'r', 'b', 'n']; // Farzin, Ruh, Fil, Ot
+        const pieceTypes = ['q', 'r', 'b', 'n'];
         
         list.innerHTML = '';
         pieceTypes.forEach(type => {
@@ -219,24 +871,45 @@
     }
 
     function makeMove(from, to, promotionType) {
+        const oldFen = game.fen();
         const move = game.move({ from: from, to: to, promotion: promotionType || 'q' });
         if (move === null) return;
+
+        if (move.captured) playSound('capture-sound'); else playSound('move-sound');
 
         removeMarkers();
         selectedSquare = null;
         board.position(game.fen());
+        
         db.ref('games/' + gameId).update({ fen: game.fen() });
+        db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
+        
         updateStatus();
     }
 
     function startGame(id, role) {
+        inGame = true;
         gameId = id;
         myRole = role;
+        stopLobbyMusic();
+        
+        game.reset();
+        gameOver = false;
+        whiteTimeLeft = 600;
+        blackTimeLeft = 600;
+
         db.ref('presence/' + userId).update({ inGame: true });
         
         document.getElementById('menu').style.display = 'none';
-        document.getElementById('status-container').style.display = 'block';
+        document.getElementById('board').style.display = 'block';
+        document.getElementById('status-container').style.display = 'flex';
         document.getElementById('resign-btn').style.display = 'block';
+        document.getElementById('chat-toggle-btn').style.display = 'block';
+
+        document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
+        document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
+
+        setupChatSystem();
 
         const config = {
             draggable: false,
@@ -246,32 +919,50 @@
         };
         board = Chessboard('board', config);
         
-        $('#board').on('mousedown touchstart', '.square-55d63', function(e) {
+        $('#board').off().on('mousedown touchstart', '.square-55d63', function(e) {
             let square = $(this).data('square');
             onSquareClick(square);
         });
 
         db.ref('games/' + gameId).on('value', (snap) => {
             const data = snap.val();
-            if (data && data.fen !== game.fen()) {
+            if (data && data.fen && data.fen !== game.fen()) {
+                const oldPieceCount = game.fen().split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
                 game.load(data.fen);
+                const newPieceCount = data.fen.split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
+                
+                if (newPieceCount < oldPieceCount) playSound('capture-sound'); else playSound('move-sound');
+                
                 board.position(data.fen);
                 updateStatus();
             }
             if (data && data.event === 'resign') {
-                alert("Raqib taslim bo'ldi!");
-                location.reload();
+                finishGame(true, LOCALES[currentLang].opponentResigned);
             }
         });
+
+        db.ref('games/' + gameId + '/clocks').on('value', (snap) => {
+            const data = snap.val();
+            const currentTurn = game.turn();
+            const myTurnSymbol = myRole === 'white' ? 'w' : 'b';
+            if (data && currentTurn !== myTurnSymbol) {
+                whiteTimeLeft = data.w;
+                blackTimeLeft = data.b;
+                lastClockUpdate = Date.now();
+                document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
+                document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
+            }
+        });
+
         updateStatus();
     }
 
     function updateStatus() {
-        let status = game.turn() === 'w' ? "OQLAR NAVBATI" : "QORALAR NAVBATI";
+        let status = game.turn() === 'w' ? LOCALES[currentLang].whiteTurn : LOCALES[currentLang].blackTurn;
         $('#board .square-55d63').removeClass('king-check');
 
         if (game.in_check()) {
-            status += "<br><span style='color: #e74c3c; font-size: 14px;'>SHOH XAVF OSTIDA!</span>";
+            status += LOCALES[currentLang].checkText;
             const turn = game.turn();
             const boardMatrix = game.board();
             for (let i = 0; i < 8; i++) {
@@ -285,24 +976,74 @@
             }
         }
 
-        if (game.in_checkmate()) status = "O'YIN TUGADI (MOT)";
-        else if (game.in_draw()) status = "DURANG";
+        if (game.in_checkmate()) {
+            status = LOCALES[currentLang].mateText;
+            document.getElementById('status').innerHTML = status;
+            const myTurnSymbol = myRole === 'white' ? 'w' : 'b';
+            finishGame(game.turn() !== myTurnSymbol, game.turn() === myTurnSymbol ? LOCALES[currentLang].lostNoPieces : LOCALES[currentLang].youWon);
+            return;
+        } else if (game.in_draw()) {
+            status = LOCALES[currentLang].drawText;
+            document.getElementById('status').innerHTML = status;
+            finishGame(false, LOCALES[currentLang].drawText);
+            return;
+        }
         
         document.getElementById('status').innerHTML = status;
+        if (!gameOver) startMoveTimer();
     }
 
     function resignGame() {
-        if (confirm("Taslim bo'lasizmi?")) {
+        if (confirm(LOCALES[currentLang].resignConfirm)) {
             db.ref('games/' + gameId).update({ event: 'resign' });
-            location.reload();
+            finishGame(false, LOCALES[currentLang].youResigned);
         }
     }
 
-    function exitApp() {
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.close();
-        } else {
-            window.location.href = "https://www.google.com";
+    function invite(id) {
+        const gid = userId + "_" + id;
+        db.ref('invites/' + id).set({ fromId: userId, fromName: currentName, gameId: gid, ts: Date.now() });
+        startGame(gid, 'white');
+    }
+
+    db.ref('invites/' + userId).on('value', (snap) => {
+        const inv = snap.val();
+        if (inv && !inGame && inv.ts > sessionStartTime) {
+            if (confirm(inv.fromName + " " + LOCALES[currentLang].inviteSent)) {
+                db.ref('invites/' + userId).remove();
+                startGame(inv.gameId, 'black');
+            }
+        }
+    });
+
+    db.ref('presence').on('value', (snap) => {
+        const list = document.getElementById('online-list');
+        list.innerHTML = '';
+        let onlineCount = 0;
+        snap.forEach(c => {
+            if (c.key !== userId && c.val().online && !c.val().inGame) {
+                onlineCount++;
+                list.innerHTML += `<div class="user-item">
+                    <span>👤 ${c.val().name}</span> 
+                    <button class="invite-btn" onclick="invite('${c.key}')">${LOCALES[currentLang].invite}</button>
+                </div>`;
+            }
+        });
+        if (onlineCount === 0) {
+            list.innerHTML = `<div style="text-align:center; padding:15px; color:#aaa;">${LOCALES[currentLang].noPlayers}</div>`;
+        }
+    });
+
+    function stopLobbyMusic() {
+        const lobbyMusic = document.getElementById('lobby-music');
+        lobbyMusic.pause(); lobbyMusic.currentTime = 0; musicStarted = false;
+    }
+
+    let musicStarted = false;
+    function handleInteraction() {
+        if (!musicStarted && !inGame) {
+            const lobbyMusic = document.getElementById('lobby-music');
+            lobbyMusic.play().catch(() => {}); musicStarted = true;
         }
     }
 </script>
