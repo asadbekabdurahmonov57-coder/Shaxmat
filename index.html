@@ -90,8 +90,8 @@
         #status-container { display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; width: 100%; }
         #status { font-size: 4.5vw; font-weight: 900; text-transform: uppercase; text-align: center; background: #2c2c2c; padding: 8px 20px; border-radius: 30px; min-width: 200px; border: 2px solid #444; color: #f1c40f; }
         #clocks-container { display: flex; justify-content: space-around; width: 95vw; max-width: 450px; margin-top: 8px; font-family: monospace; font-size: 4vw; font-weight: 900; }
-        .clock-box { background: #2c2c2c; padding: 5px 12px; border-radius: 8px; border: 1px solid #555; min-width: 110px; text-align: center; }
-        .active-clock { border-color: #f1c40f; color: #f1c40f; box-shadow: 0 0 8px rgba(241, 196, 15, 0.4); }
+        .clock-box { background: #2c2c2c; padding: 5px 12px; border-radius: 8px; border: 1px solid #555; min-width: 110px; text-align: center; transition: all 0.1s ease; }
+        .active-clock { border-color: #f1c40f; color: #f1c40f; box-shadow: 0 0 8px rgba(241, 196, 15, 0.4); background: #2c2c2c; }
         
         #board { width: 95vw; max-width: 400px; margin: 10px; border: 5px solid #3e2723; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         
@@ -467,7 +467,7 @@
     let currentLang = localStorage.getItem('shashka_lang') || 'uz';
     let soundEnabled = true;
     let globalTimer = null;
-    let lastClockUpdateGlobal = 0;
+    let lastFrameTime = 0;
 
     const firebaseConfig = {
         apiKey: "AIzaSyDvuBmuKfEPnd-ocDxzbzmfdCRLZUXnEO0",
@@ -702,32 +702,44 @@
     }
 
     function startGlobalTimer() {
-        if(globalTimer) clearInterval(globalTimer);
-        lastClockUpdateGlobal = Date.now();
-        globalTimer = setInterval(() => {
+        if(globalTimer) cancelAnimationFrame(globalTimer);
+        lastFrameTime = performance.now();
+        
+        function tick(now) {
             if(gameOver || !inGame) return;
-            const now = Date.now();
-            const delta = Math.floor((now - lastClockUpdateGlobal) / 1000);
-            if(delta >= 1 && !game.game_over()) {
-                if(game.turn() === 'w') whiteTimeLeft = Math.max(0, whiteTimeLeft - delta);
-                else blackTimeLeft = Math.max(0, blackTimeLeft - delta);
-                lastClockUpdateGlobal = now;
+            const deltaSeconds = (now - lastFrameTime) / 1000;
+            if(deltaSeconds >= 0.05 && !game.game_over()) {
+                let turn = game.turn();
+                if(turn === 'w') {
+                    whiteTimeLeft = Math.max(0, whiteTimeLeft - deltaSeconds);
+                } else {
+                    blackTimeLeft = Math.max(0, blackTimeLeft - deltaSeconds);
+                }
+                lastFrameTime = now;
                 updateClocksDisplay();
                 
                 if(isVsBot) {
-                    db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
+                    db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
                 } else if(gameId) {
-                    db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
+                    db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
                 }
                 
                 if(whiteTimeLeft <= 0) finishGame(myRole === 'black', LOCALES[currentLang].timeOutLoss);
                 else if(blackTimeLeft <= 0) finishGame(myRole === 'white', LOCALES[currentLang].timeOutLoss);
             }
-        }, 500);
+            if(!gameOver && inGame) globalTimer = requestAnimationFrame(tick);
+        }
+        globalTimer = requestAnimationFrame(tick);
     }
 
     function stopGlobalTimer() {
-        if(globalTimer) { clearInterval(globalTimer); globalTimer = null; }
+        if(globalTimer) { cancelAnimationFrame(globalTimer); globalTimer = null; }
+    }
+
+    function resetTimerAndStart() {
+        stopGlobalTimer();
+        lastFrameTime = performance.now();
+        startGlobalTimer();
     }
 
     function updateStats(won) {
@@ -896,7 +908,8 @@
         else db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
         
         updateStatus();
-        if (isVsBot && !gameOver && game.turn() === 'b') setTimeout(makeBotMove, 400);
+        resetTimerAndStart();
+        if (isVsBot && !gameOver && game.turn() === 'b') setTimeout(makeBotMove, 200);
     }
 
     // BOT EVALUATION (same as before, kept)
@@ -957,6 +970,7 @@
             updateMoveHistory();
             db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: mv.from, lastTo: mv.to });
             updateStatus();
+            resetTimerAndStart();
         }
     }
 
@@ -965,8 +979,7 @@
         stopLobbyMusic();
         game.reset(); gameOver = false;
         whiteTimeLeft = 600; blackTimeLeft = 600;
-        lastClockUpdateGlobal = Date.now();
-        if(globalTimer) clearInterval(globalTimer);
+        stopGlobalTimer();
         startGlobalTimer();
         db.ref('presence/' + userId).update({ inGame: true });
         db.ref('bot_games/' + userId).set({ fen: game.fen(), player: currentName, ts: Date.now() });
@@ -987,7 +1000,7 @@
     }
 
     function offerDraw() { if(!isVsBot && !gameOver) db.ref('games/' + gameId).update({ event: 'draw_offer', sender: userId }); }
-    function startGame(id, role) { isVsBot=false; inGame=true; gameId=id; myRole=role; stopLobbyMusic(); game.reset(); gameOver=false; whiteTimeLeft=600; blackTimeLeft=600; lastClockUpdateGlobal=Date.now(); if(globalTimer) clearInterval(globalTimer); startGlobalTimer(); db.ref('presence/'+userId).update({inGame:true}); document.getElementById('menu').style.display='none'; document.getElementById('board').style.display='block'; document.getElementById('history-container').style.display='block'; document.getElementById('status-container').style.display='flex'; document.getElementById('resign-btn').style.display='block'; document.getElementById('draw-btn').style.display='block'; document.getElementById('chat-toggle-btn').style.display='block'; updateClocksDisplay(); setupChatSystem(); updateMoveHistory(); const config={draggable:false, position:'start', orientation:myRole, pieceTheme:'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'}; board=Chessboard('board', config); $('#board').off().on('mousedown touchstart','.square-55d63',function(e){onSquareClick($(this).data('square'));}); db.ref('games/'+gameId).on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(!data)return;if(data.fen&&data.fen!==game.fen()){const oldCount=game.fen().split(' ')[0].replace(/[^a-zA-Z]/g,"").length;game.load(data.fen);const newCount=data.fen.split(' ')[0].replace(/[^a-zA-Z]/g,"").length;if(newCount<oldCount)playSound('capture-sound');else playSound('move-sound');board.position(data.fen);highlightLastMove(data.lastFrom,data.lastTo);updateMoveHistory();updateStatus();}if(data.event==='resign')finishGame(true,LOCALES[currentLang].opponentResigned);if(data.event==='draw_offer'&&data.sender!==userId){db.ref('games/'+gameId).update({event:'none'});if(confirm(LOCALES[currentLang].drawOffer))db.ref('games/'+gameId).update({event:'draw_accept'});else db.ref('games/'+gameId).update({event:'draw_reject'});}if(data.event==='draw_accept')finishGame('draw',LOCALES[currentLang].drawText);if(data.event==='draw_reject'&&data.sender===userId){db.ref('games/'+gameId).update({event:'none'});alert(LOCALES[currentLang].drawReject);}}); db.ref('games/'+gameId+'/clocks').on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(data){whiteTimeLeft=data.w;blackTimeLeft=data.b;lastClockUpdateGlobal=Date.now();updateClocksDisplay();}}); updateStatus(); }
+    function startGame(id, role) { isVsBot=false; inGame=true; gameId=id; myRole=role; stopLobbyMusic(); game.reset(); gameOver=false; whiteTimeLeft=600; blackTimeLeft=600; stopGlobalTimer(); startGlobalTimer(); db.ref('presence/'+userId).update({inGame:true}); document.getElementById('menu').style.display='none'; document.getElementById('board').style.display='block'; document.getElementById('history-container').style.display='block'; document.getElementById('status-container').style.display='flex'; document.getElementById('resign-btn').style.display='block'; document.getElementById('draw-btn').style.display='block'; document.getElementById('chat-toggle-btn').style.display='block'; updateClocksDisplay(); setupChatSystem(); updateMoveHistory(); const config={draggable:false, position:'start', orientation:myRole, pieceTheme:'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'}; board=Chessboard('board', config); $('#board').off().on('mousedown touchstart','.square-55d63',function(e){onSquareClick($(this).data('square'));}); db.ref('games/'+gameId).on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(!data)return;if(data.fen&&data.fen!==game.fen()){const oldCount=game.fen().split(' ')[0].replace(/[^a-zA-Z]/g,"").length;game.load(data.fen);const newCount=data.fen.split(' ')[0].replace(/[^a-zA-Z]/g,"").length;if(newCount<oldCount)playSound('capture-sound');else playSound('move-sound');board.position(data.fen);highlightLastMove(data.lastFrom,data.lastTo);updateMoveHistory();updateStatus();resetTimerAndStart();}if(data.event==='resign')finishGame(true,LOCALES[currentLang].opponentResigned);if(data.event==='draw_offer'&&data.sender!==userId){db.ref('games/'+gameId).update({event:'none'});if(confirm(LOCALES[currentLang].drawOffer))db.ref('games/'+gameId).update({event:'draw_accept'});else db.ref('games/'+gameId).update({event:'draw_reject'});}if(data.event==='draw_accept')finishGame('draw',LOCALES[currentLang].drawText);if(data.event==='draw_reject'&&data.sender===userId){db.ref('games/'+gameId).update({event:'none'});alert(LOCALES[currentLang].drawReject);}}); db.ref('games/'+gameId+'/clocks').on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(data){whiteTimeLeft=data.w;blackTimeLeft=data.b;lastFrameTime=performance.now();updateClocksDisplay();}}); updateStatus(); }
 
     function updateStatus() {
         let status = game.turn() === 'w' ? LOCALES[currentLang].whiteTurn : LOCALES[currentLang].blackTurn;
