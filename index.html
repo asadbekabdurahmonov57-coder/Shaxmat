@@ -446,7 +446,7 @@
             timeOutLoss: "Время истекло! Вы проиграли.",
             timeOutWin: "Время соперника истекло! Вы выиграли.",
             rulesTitle: "❓ Правила игры",
-            rulesText: "1. Шахматы разыгрываются на доске размером 8х8 клеток.<br><br>2. Белые ходят первыми.<br><br>3. Цель игры — поставить мат королю соперника, то есть атаковать его так, чтобы не было спасения.<br><br>4. Каждая фигура (Пешка, Ладья, Конь, Слон, Ферзь, Король) ходит по своим уникальным правилам.<br><br>5. Пешка, достигшая противоположного края, может быть превращена в Ферзя, Ладью, Слона или Коня.<br><br>6. Каждому игроку дается 10 минут на партию. Игрок, у которого закончилось время, проигрывает.",
+            rulesText: "1. Шахматы разыгрываются на доске размером 8х8 клеток.<br><br>2. Белые ходят первыми.<br><br>3. Цель игры — поставить мат королю соперника, то есть атаковать его так, чтобы не было спасения.<br><br>4. Каждая фигура (Пешка, Ладья, Конь, Слон, Ферзь, Король) ходит по своим уникальным правилам.<br><br>5. Пешка, достигшая противоположного края, может быть превращена в Ферзя, Ладью, Слона или Коня.<br><br>6. Каждому igroku дается 10 минут на партию. Игрок, у которого закончилось время, проигрывает.",
             promoText: "Выберите фигуру",
             checkText: "<br><span style='color: #e74c3c; font-size: 14px;'>КОРОЛЬ ПОД ШАХОМ!</span>",
             mateText: "ИГРА ОКОНЧЕНА (МАТ)",
@@ -721,7 +721,6 @@
                 if (gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
                     db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 } else if (isVsBot) {
-                    // Bot o'ynayotganda ham firebase tizimida yoki local holatda vaqt yangilanadi
                     db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 }
 
@@ -808,7 +807,7 @@
         updateMyRankInMenu();
         if (musicStarted && soundEnabled) {
             const lobbyMusic = document.getElementById('lobby-music');
-            lobbyMusic.play().catch(() => {});
+            lobbyMusic.play().catch(() => {}); musicStarted = true;
         }
     }
 
@@ -1142,6 +1141,7 @@
         gameOver = false;
         whiteTimeLeft = 600;
         blackTimeLeft = 600;
+        lastClockUpdate = Date.now();
 
         db.ref('presence/' + userId).update({ inGame: true });
         db.ref('bot_games/' + userId).set({ fen: game.fen(), player: currentName, ts: Date.now() });
@@ -1193,6 +1193,7 @@
         gameOver = false;
         whiteTimeLeft = 600;
         blackTimeLeft = 600;
+        lastClockUpdate = Date.now();
 
         db.ref('presence/' + userId).update({ inGame: true });
         
