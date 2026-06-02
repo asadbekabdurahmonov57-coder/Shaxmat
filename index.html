@@ -120,7 +120,6 @@
         #resign-btn { flex: 1; display: none; background: #e74c3c; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         #chat-toggle-btn { flex: 1; display: none; background: #3498db; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         
-        /* Yangi qo'shilgan elementlar stillari */
         #draw-btn { flex: 1; display: none; background: #f39c12; color: white; padding: 12px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         #history-container { width: 95vw; max-width: 400px; background: #2c2c2c; border: 1px solid #444; border-radius: 8px; margin-top: 10px; padding: 8px; display: none; font-size: 13px; max-height: 60px; overflow-y: auto; text-align: center; color: #aaa; }
         .highlight-last { box-shadow: inset 0 0 10px 3px rgba(241, 196, 15, 0.6) !important; }
@@ -467,6 +466,8 @@
 
     let currentLang = localStorage.getItem('shashka_lang') || 'uz';
     let soundEnabled = true;
+    let globalTimer = null;
+    let lastClockUpdateGlobal = 0;
 
     const firebaseConfig = {
         apiKey: "AIzaSyDvuBmuKfEPnd-ocDxzbzmfdCRLZUXnEO0",
@@ -488,11 +489,10 @@
     let selectedSquare = null;
     let pendingPromotion = null;
     let inGame = false, gameOver = false, sessionStartTime = Date.now();
-    let moveTimerInterval = null, exitInt = null;
+    let exitInt = null;
 
     let whiteTimeLeft = 600;
     let blackTimeLeft = 600;
-    let lastClockUpdate = Date.now();
 
     if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         userId = tg.initDataUnsafe.user.id.toString();
@@ -691,49 +691,43 @@
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    function startMoveTimer() {
-        clearInterval(moveTimerInterval);
-        lastClockUpdate = Date.now();
-        
-        const turn = game.turn() === 'w' ? 'white' : 'black';
-        document.getElementById('clock-white').classList.toggle('active-clock', turn === 'white');
-        document.getElementById('clock-black').classList.toggle('active-clock', turn === 'black');
+    function updateClocksDisplay() {
+        let whiteLabel = isVsBot ? (myRole === 'white' ? "Siz (Oq): " : LOCALES[currentLang].botName + " (Oq): ") : (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ");
+        let blackLabel = isVsBot ? (myRole === 'black' ? "Siz (Qora): " : LOCALES[currentLang].botName + " (Qora): ") : (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ");
+        document.getElementById('clock-white').innerText = whiteLabel + formatTime(whiteTimeLeft);
+        document.getElementById('clock-black').innerText = blackLabel + formatTime(blackTimeLeft);
+        const turn = game.turn();
+        document.getElementById('clock-white').classList.toggle('active-clock', turn === 'w');
+        document.getElementById('clock-black').classList.toggle('active-clock', turn === 'b');
+    }
 
-        moveTimerInterval = setInterval(() => {
-            if (gameOver) { clearInterval(moveTimerInterval); return; }
-            
+    function startGlobalTimer() {
+        if(globalTimer) clearInterval(globalTimer);
+        lastClockUpdateGlobal = Date.now();
+        globalTimer = setInterval(() => {
+            if(gameOver || !inGame) return;
             const now = Date.now();
-            const delta = Math.floor((now - lastClockUpdate) / 1000);
-            if (delta >= 1) {
-                if (game.turn() === 'w') {
-                    whiteTimeLeft = Math.max(0, whiteTimeLeft - delta);
-                } else {
-                    blackTimeLeft = Math.max(0, blackTimeLeft - delta);
-                }
-                lastClockUpdate = now;
+            const delta = Math.floor((now - lastClockUpdateGlobal) / 1000);
+            if(delta >= 1 && !game.game_over()) {
+                if(game.turn() === 'w') whiteTimeLeft = Math.max(0, whiteTimeLeft - delta);
+                else blackTimeLeft = Math.max(0, blackTimeLeft - delta);
+                lastClockUpdateGlobal = now;
+                updateClocksDisplay();
                 
-                let whiteLabel = myRole === 'white' ? "Siz (Oq): " : (isVsBot ? LOCALES[currentLang].botName + " (Oq): " : "Raqib (Oq): ");
-                let blackLabel = myRole === 'black' ? "Siz (Qora): " : (isVsBot ? LOCALES[currentLang].botName + " (Qora): " : "Raqib (Qora): ");
-
-                document.getElementById('clock-white').innerText = whiteLabel + formatTime(whiteTimeLeft);
-                document.getElementById('clock-black').innerText = blackLabel + formatTime(blackTimeLeft);
-                
-                // Tuzatilgan qism: Bot o'yinida ham vaqtlarni Firebase'ga yozish
-                if (isVsBot) {
+                if(isVsBot) {
                     db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
-                } else if (gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
+                } else if(gameId) {
                     db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 }
-
-                if (whiteTimeLeft <= 0) {
-                    clearInterval(moveTimerInterval);
-                    finishGame(myRole === 'black', myRole === 'white' ? LOCALES[currentLang].timeOutLoss : LOCALES[currentLang].timeOutWin);
-                } else if (blackTimeLeft <= 0) {
-                    clearInterval(moveTimerInterval);
-                    finishGame(myRole === 'white', myRole === 'black' ? LOCALES[currentLang].timeOutLoss : LOCALES[currentLang].timeOutWin);
-                }
+                
+                if(whiteTimeLeft <= 0) finishGame(myRole === 'black', LOCALES[currentLang].timeOutLoss);
+                else if(blackTimeLeft <= 0) finishGame(myRole === 'white', LOCALES[currentLang].timeOutLoss);
             }
         }, 500);
+    }
+
+    function stopGlobalTimer() {
+        if(globalTimer) { clearInterval(globalTimer); globalTimer = null; }
     }
 
     function updateStats(won) {
@@ -766,10 +760,11 @@
     function finishGame(won, message) {
         if (gameOver) return;
         gameOver = true;
-        clearInterval(moveTimerInterval);
-        document.getElementById('winner-msg').innerText = message;
+        stopGlobalTimer();
+        document.getElementById('winner-msg').innerHTML = message;
         document.getElementById('game-over-overlay').style.display = 'flex';
-        if (won) playSound('winner-sound'); else playSound('loser-sound');
+        if (won === true) playSound('winner-sound');
+        else if (won === false) playSound('loser-sound');
         if (won !== 'draw') updateStats(won);
         if (gameId && !isVsBot) {
             db.ref('games/' + gameId).off();
@@ -777,11 +772,10 @@
             db.ref('games/' + gameId).remove();
             db.ref('chats/' + gameId).remove();
         }
-        if (isVsBot) {
-            db.ref('bot_games/' + userId).remove();
-        }
+        if (isVsBot) db.ref('bot_games/' + userId).remove();
         db.ref('presence/' + userId).update({ inGame: false });
         let timeLeft = 10;
+        if(exitInt) clearInterval(exitInt);
         exitInt = setInterval(() => {
             timeLeft--;
             document.getElementById('exit-timer').innerText = LOCALES[currentLang].menuReturn + timeLeft;
@@ -803,6 +797,7 @@
         gameOver = false;
         gameId = '';
         isVsBot = false;
+        stopGlobalTimer();
         
         document.getElementById('menu').style.display = 'flex';
         updateMyRankInMenu();
@@ -815,12 +810,7 @@
     function toggleChat(show) {
         if (isVsBot) return; 
         document.getElementById('chat-modal').style.display = show ? 'flex' : 'none';
-        if (show) {
-            setTimeout(() => {
-                const container = document.getElementById('chat-messages');
-                container.scrollTop = container.scrollHeight;
-            }, 50);
-        }
+        if (show) setTimeout(() => { const container = document.getElementById('chat-messages'); container.scrollTop = container.scrollHeight; }, 50);
     }
 
     function setupChatSystem() {
@@ -843,310 +833,143 @@
         const input = document.getElementById('chat-input');
         const text = input.value.trim();
         if (!text) return;
-        
-        db.ref('chats/' + gameId).push({
-            senderId: userId,
-            senderName: currentName,
-            text: text,
-            ts: Date.now()
-        });
+        db.ref('chats/' + gameId).push({ senderId: userId, senderName: currentName, text: text, ts: Date.now() });
         input.value = '';
     }
 
-    function removeMarkers () {
-        $('#board .square-55d63').find('.dot').remove();
-        $('#board .square-55d63').removeClass('enemy-target');
-    }
-
+    function removeMarkers () { $('#board .square-55d63').find('.dot').remove(); $('#board .square-55d63').removeClass('enemy-target'); }
     function addMarker (square) {
         let $square = $('#board .square-' + square);
-        let piece = game.get(square);
-        if (piece) {
-            $square.addClass('enemy-target');
-        } else {
-            $square.append('<div class="dot"></div>');
-        }
+        if (game.get(square)) $square.addClass('enemy-target');
+        else $square.append('<div class="dot"></div>');
     }
-
-    function highlightLastMove(from, to) {
-        $('#board .square-55d63').removeClass('highlight-last');
-        if(from && to) {
-            $('#board .square-' + from).addClass('highlight-last');
-            $('#board .square-' + to).addClass('highlight-last');
-        }
-    }
-
+    function highlightLastMove(from, to) { $('#board .square-55d63').removeClass('highlight-last'); if(from && to) { $('#board .square-' + from).addClass('highlight-last'); $('#board .square-' + to).addClass('highlight-last'); } }
     function updateMoveHistory() {
         const history = game.history();
         let html = "";
-        for(let i=0; i<history.length; i+=2) {
-            html += `<b>${Math.floor(i/2)+1}.</b> ${history[i]} ` + (history[i+1] ? ` ${history[i+1]} ` : "");
-        }
-        const container = document.getElementById('history-container');
-        container.innerHTML = html || "...";
-        container.scrollTop = container.scrollHeight;
+        for(let i=0; i<history.length; i+=2) html += `<b>${Math.floor(i/2)+1}.</b> ${history[i]} ` + (history[i+1] ? ` ${history[i+1]} ` : "");
+        document.getElementById('history-container').innerHTML = html || "...";
+        document.getElementById('history-container').scrollTop = document.getElementById('history-container').scrollHeight;
     }
 
     function onSquareClick (square) {
         if (game.game_over() || gameOver) return;
         const turn = game.turn();
         if ((turn === 'w' && myRole === 'black') || (turn === 'b' && myRole === 'white')) return;
-
         let $target = $('#board .square-' + square);
-        if (selectedSquare && ($target.find('.dot').length > 0 || $target.hasClass('enemy-target'))) {
-            checkPromotion(selectedSquare, square);
-            return;
-        }
-
+        if (selectedSquare && ($target.find('.dot').length > 0 || $target.hasClass('enemy-target'))) { checkPromotion(selectedSquare, square); return; }
         removeMarkers();
         let piece = game.get(square);
         if (piece && piece.color === turn) {
             selectedSquare = square;
-            let moves = game.moves({ square: square, verbose: true });
-            moves.forEach(m => addMarker(m.to));
-        } else {
-            selectedSquare = null;
-        }
+            game.moves({ square: square, verbose: true }).forEach(m => addMarker(m.to));
+        } else selectedSquare = null;
     }
 
     function checkPromotion(from, to) {
         let piece = game.get(from);
-        if (piece.type === 'p' && ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'))) {
-            pendingPromotion = { from: from, to: to };
-            showPromotionMenu(piece.color);
-        } else {
-            makeMove(from, to, 'q');
-        }
+        if (piece.type === 'p' && ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'))) { pendingPromotion = { from, to }; showPromotionMenu(piece.color); }
+        else makeMove(from, to, 'q');
     }
 
     function showPromotionMenu(color) {
         const menu = document.getElementById('promotion-menu');
         const list = document.getElementById('promo-list');
         const pieceTypes = ['q', 'r', 'b', 'n'];
-        
         list.innerHTML = '';
-        pieceTypes.forEach(type => {
-            const fileName = color + type.toUpperCase();
-            const imgUrl = `https://chessboardjs.com/img/chesspieces/wikipedia/${fileName}.png`;
-            list.innerHTML += `<img src="${imgUrl}" class="promo-piece" onclick="selectPromotion('${type}')">`;
-        });
+        pieceTypes.forEach(type => { list.innerHTML += `<img src="https://chessboardjs.com/img/chesspieces/wikipedia/${color+type.toUpperCase()}.png" class="promo-piece" onclick="selectPromotion('${type}')">`; });
         menu.style.display = 'flex';
     }
 
-    function selectPromotion(pieceType) {
-        document.getElementById('promotion-menu').style.display = 'none';
-        if (pendingPromotion) {
-            makeMove(pendingPromotion.from, pendingPromotion.to, pieceType);
-            pendingPromotion = null;
-        }
-    }
+    function selectPromotion(pieceType) { document.getElementById('promotion-menu').style.display = 'none'; if(pendingPromotion) { makeMove(pendingPromotion.from, pendingPromotion.to, pieceType); pendingPromotion = null; } }
 
     function makeMove(from, to, promotionType) {
-        const move = game.move({ from: from, to: to, promotion: promotionType || 'q' });
-        if (move === null) return;
-
+        const move = game.move({ from, to, promotion: promotionType || 'q' });
+        if (!move) return;
         if (move.captured) playSound('capture-sound'); else playSound('move-sound');
-
-        removeMarkers();
-        selectedSquare = null;
+        removeMarkers(); selectedSquare = null;
         board.position(game.fen());
         highlightLastMove(from, to);
         updateMoveHistory();
         
-        if (!isVsBot) {
-            db.ref('games/' + gameId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
-            db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
-        } else {
-            db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
-            db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
-        }
+        if (!isVsBot) db.ref('games/' + gameId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
+        else db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: from, lastTo: to });
         
         updateStatus();
-
-        if (isVsBot && !gameOver && game.turn() === 'b') {
-            setTimeout(makeBotMove, 400);
-        }
+        if (isVsBot && !gameOver && game.turn() === 'b') setTimeout(makeBotMove, 400);
     }
 
-    /* ==========================================================================
-       --- HIGH-LEVEL KUCHLI BOT ALGORITMI (MINIMAX + ALPHA-BETA + EVAL TABLES) ---
-       ========================================================================== */
-    const pawnEval = [
-        [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
-        [5.0,  5.0,  5.0,  5.0,  5.0,  5.0,  5.0,  5.0],
-        [1.0,  1.0,  2.0,  3.0,  3.0,  2.0,  1.0,  1.0],
-        [0.5,  0.5,  1.0,  2.5,  2.5,  1.0,  0.5,  0.5],
-        [0.0,  0.0,  0.0,  2.0,  2.0,  0.0,  0.0,  0.0],
-        [0.5, -0.5, -1.0,  0.0,  0.0, -1.0, -0.5,  0.5],
-        [0.5,  1.0, 1.0,  -2.0, -2.0,  1.0,  1.0,  0.5],
-        [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0]
-    ];
-    const knightEval = [
-        [-5.0, -4.0, -3.0, -3.0, -3.0, -3.0, -4.0, -5.0],
-        [-4.0, -2.0,  0.0,  0.0,  0.0,  0.0, -2.0, -4.0],
-        [-3.0,  0.0,  1.0,  1.5,  1.5,  1.0,  0.0, -3.0],
-        [-3.0,  0.5,  1.5,  2.0,  2.0,  1.5,  0.5, -3.0],
-        [-3.0,  0.0,  1.5,  2.0,  2.0,  1.5,  0.0, -3.0],
-        [-3.0,  0.5,  1.0,  1.5,  1.5,  1.0,  0.5, -3.0],
-        [-4.0, -2.0,  0.0,  0.5,  0.5,  0.0, -2.0, -4.0],
-        [-5.0, -4.0, -3.0, -3.0, -3.0, -3.0, -4.0, -5.0]
-    ];
-    const bishopEval = [
-        [-2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -2.0],
-        [-1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0],
-        [-1.0,  0.0,  0.5,  1.0,  1.0,  0.5,  0.0, -1.0],
-        [-1.0,  0.5,  0.5,  1.0,  1.0,  0.5,  0.5, -1.0],
-        [-1.0,  0.0,  1.0,  1.0,  1.0,  1.0,  0.0, -1.0],
-        [-1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0, -1.0],
-        [-1.0,  0.5,  0.0,  0.0,  0.0,  0.0,  0.5, -1.0],
-        [-2.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -2.0]
-    ];
-    const rookEval = [
-        [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
-        [ 0.5,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  0.5],
-        [-0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -0.5],
-        [-0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -0.5],
-        [-0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -0.5],
-        [-0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -0.5],
-        [-0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -0.5],
-        [ 0.0,  0.0,  0.0,  0.5,  0.5,  0.0,  0.0,  0.0]
-    ];
-    const queenEval = [
-        [-2.0, -1.0, -1.0, -0.5, -0.5, -1.0, -1.0, -2.0],
-        [-1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -1.0],
-        [-1.0,  0.0,  0.5,  0.5,  0.5,  0.5,  0.0, -1.0],
-        [-0.5,  0.0,  0.5,  0.5,  0.5,  0.5,  0.0, -0.5],
-        [ 0.0,  0.0,  0.5,  0.5,  0.5,  0.5,  0.0, -0.5],
-        [-1.0,  0.5,  0.5,  0.5,  0.5,  0.5,  0.0, -1.0],
-        [-1.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0, -1.0],
-        [-2.0, -1.0, -1.0, -0.5, -0.5, -1.0, -1.0, -2.0]
-    ];
-    const kingEvalBlack = [
-        [-3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0],
-        [-3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0],
-        [-3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0],
-        [-3.0, -4.0, -4.0, -5.0, -5.0, -4.0, -4.0, -3.0],
-        [-2.0, -3.0, -3.0, -4.0, -4.0, -3.0, -3.0, -2.0],
-        [-1.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -1.0],
-        [ 2.0,  2.0,  0.0,  0.0,  0.0,  0.0,  2.0,  2.0],
-        [ 2.0,  3.0,  1.0,  0.0,  0.0,  1.0,  3.0,  2.0]
-    ];
+    // BOT EVALUATION (same as before, kept)
+    const pawnEval = [[0,0,0,0,0,0,0,0],[5,5,5,5,5,5,5,5],[1,1,2,3,3,2,1,1],[0.5,0.5,1,2.5,2.5,1,0.5,0.5],[0,0,0,2,2,0,0,0],[0.5,-0.5,-1,0,0,-1,-0.5,0.5],[0.5,1,1,-2,-2,1,1,0.5],[0,0,0,0,0,0,0,0]];
+    const knightEval = [[-5,-4,-3,-3,-3,-3,-4,-5],[-4,-2,0,0,0,0,-2,-4],[-3,0,1,1.5,1.5,1,0,-3],[-3,0.5,1.5,2,2,1.5,0.5,-3],[-3,0,1.5,2,2,1.5,0,-3],[-3,0.5,1,1.5,1.5,1,0.5,-3],[-4,-2,0,0.5,0.5,0,-2,-4],[-5,-4,-3,-3,-3,-3,-4,-5]];
+    const bishopEval = [[-2,-1,-1,-1,-1,-1,-1,-2],[-1,0,0,0,0,0,0,-1],[-1,0,0.5,1,1,0.5,0,-1],[-1,0.5,0.5,1,1,0.5,0.5,-1],[-1,0,1,1,1,1,0,-1],[-1,1,1,1,1,1,1,-1],[-1,0.5,0,0,0,0,0.5,-1],[-2,-1,-1,-1,-1,-1,-1,-2]];
+    const rookEval = [[0,0,0,0,0,0,0,0],[0.5,1,1,1,1,1,1,0.5],[-0.5,0,0,0,0,0,0,-0.5],[-0.5,0,0,0,0,0,0,-0.5],[-0.5,0,0,0,0,0,0,-0.5],[-0.5,0,0,0,0,0,0,-0.5],[-0.5,0,0,0,0,0,0,-0.5],[0,0,0,0.5,0.5,0,0,0]];
+    const queenEval = [[-2,-1,-1,-0.5,-0.5,-1,-1,-2],[-1,0,0,0,0,0,0,-1],[-1,0,0.5,0.5,0.5,0.5,0,-1],[-0.5,0,0.5,0.5,0.5,0.5,0,-0.5],[0,0,0.5,0.5,0.5,0.5,0,-0.5],[-1,0.5,0.5,0.5,0.5,0.5,0,-1],[-1,0,0.5,0,0,0,0,-1],[-2,-1,-1,-0.5,-0.5,-1,-1,-2]];
+    const kingEvalBlack = [[-3,-4,-4,-5,-5,-4,-4,-3],[-3,-4,-4,-5,-5,-4,-4,-3],[-3,-4,-4,-5,-5,-4,-4,-3],[-3,-4,-4,-5,-5,-4,-4,-3],[-2,-3,-3,-4,-4,-3,-3,-2],[-1,-2,-2,-2,-2,-2,-2,-1],[2,2,0,0,0,0,2,2],[2,3,1,0,0,1,3,2]];
 
     function evaluateBoard(gameObj) {
-        let totalEvaluation = 0;
-        const boardState = gameObj.board();
-        for (let i = 0; i < 8; i++) {
-            for (let j = 0; j < 8; j++) {
-                if (boardState[i][j]) {
-                    totalEvaluation += getPieceValue(boardState[i][j], i, j);
-                }
-            }
-        }
-        return totalEvaluation;
+        let total = 0;
+        const b = gameObj.board();
+        for(let i=0;i<8;i++) for(let j=0;j<8;j++) if(b[i][j]) total += getPieceValue(b[i][j], i, j);
+        return total;
     }
-
-    function getPieceValue(piece, x, y) {
-        if (!piece) return 0;
-        let value = 0;
-        if (piece.type === 'p') value = 10;
-        else if (piece.type === 'r') value = 50;
-        else if (piece.type === 'n') value = 30;
-        else if (piece.type === 'b') value = 30;
-        else if (piece.type === 'q') value = 90;
-        else if (piece.type === 'k') value = 9000;
-
-        let posValue = 0;
-        if (piece.type === 'p') posValue = pawnEval[x][y];
-        else if (piece.type === 'r') posValue = rookEval[x][y];
-        else if (piece.type === 'n') posValue = knightEval[x][y];
-        else if (piece.type === 'b') posValue = bishopEval[x][y];
-        else if (piece.type === 'q') posValue = queenEval[x][y];
-        else if (piece.type === 'k') posValue = kingEvalBlack[x][y];
-
-        return piece.color === 'w' ? -(value + posValue) : (value + posValue);
+    function getPieceValue(p, x, y) {
+        let val = 0;
+        if(p.type==='p') val=10; else if(p.type==='r') val=50; else if(p.type==='n') val=30; else if(p.type==='b') val=30; else if(p.type==='q') val=90; else if(p.type==='k') val=9000;
+        let pos = 0;
+        if(p.type==='p') pos=pawnEval[x][y];
+        else if(p.type==='r') pos=rookEval[x][y];
+        else if(p.type==='n') pos=knightEval[x][y];
+        else if(p.type==='b') pos=bishopEval[x][y];
+        else if(p.type==='q') pos=queenEval[x][y];
+        else if(p.type==='k') pos=kingEvalBlack[x][y];
+        return p.color==='w' ? -(val+pos) : (val+pos);
     }
-
-    function minimax(gameObj, depth, alpha, beta, isMaximizing) {
-        if (depth === 0 || gameObj.game_over()) {
-            return evaluateBoard(gameObj);
-        }
-        let moves = gameObj.moves();
-        
-        moves.sort(() => 0.5 - Math.random()); 
-
-        if (isMaximizing) {
-            let maxEval = -Infinity;
-            for (let move of moves) {
-                gameObj.move(move);
-                let evaluation = minimax(gameObj, depth - 1, alpha, beta, false);
-                gameObj.undo();
-                maxEval = Math.max(maxEval, evaluation);
-                alpha = Math.max(alpha, evaluation);
-                if (beta <= alpha) break;
-            }
+    function minimax(gameObj, depth, alpha, beta, isMax) {
+        if(depth===0 || gameObj.game_over()) return evaluateBoard(gameObj);
+        let moves = gameObj.moves(); moves.sort(()=>0.5-Math.random());
+        if(isMax) {
+            let maxEval=-Infinity;
+            for(let move of moves) { gameObj.move(move); let eval=minimax(gameObj, depth-1, alpha, beta, false); gameObj.undo(); maxEval=Math.max(maxEval, eval); alpha=Math.max(alpha, eval); if(beta<=alpha) break; }
             return maxEval;
         } else {
-            let minEval = Infinity;
-            for (let move of moves) {
-                gameObj.move(move);
-                let evaluation = minimax(gameObj, depth - 1, alpha, beta, true);
-                gameObj.undo();
-                minEval = Math.min(minEval, evaluation);
-                beta = Math.min(beta, evaluation);
-                if (beta <= alpha) break;
-            }
+            let minEval=Infinity;
+            for(let move of moves) { gameObj.move(move); let eval=minimax(gameObj, depth-1, alpha, beta, true); gameObj.undo(); minEval=Math.min(minEval, eval); beta=Math.min(beta, eval); if(beta<=alpha) break; }
             return minEval;
         }
     }
-
     function makeBotMove() {
-        if (gameOver) return;
-        const moves = game.moves();
-        if (moves.length === 0) return;
-
-        let bestMove = null;
-        let maxEval = -Infinity;
-        
-        const depth = 3; 
-
-        for (let move of moves) {
+        if(gameOver || game.game_over()) return;
+        let moves = game.moves();
+        if(moves.length===0) return;
+        let bestMove=null, maxEval=-Infinity;
+        for(let move of moves) {
             game.move(move);
-            let evaluation = minimax(game, depth - 1, -Infinity, Infinity, false);
+            let eval = minimax(game, 2, -Infinity, Infinity, false);
             game.undo();
-            if (evaluation >= maxEval) {
-                maxEval = evaluation;
-                bestMove = move;
-            }
+            if(eval >= maxEval) { maxEval=eval; bestMove=move; }
         }
-        
-        let oldFen = game.fen();
-        const moveObj = game.move(bestMove || moves[0]);
-        if (moveObj.captured) playSound('capture-sound'); else playSound('move-sound');
-        board.position(game.fen());
-        highlightLastMove(moveObj.from, moveObj.to);
-        updateMoveHistory();
-        
-        db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: moveObj.from, lastTo: moveObj.to });
-        db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
-
-        updateStatus();
+        let mv = game.move(bestMove || moves[0]);
+        if(mv) {
+            if(mv.captured) playSound('capture-sound'); else playSound('move-sound');
+            board.position(game.fen());
+            highlightLastMove(mv.from, mv.to);
+            updateMoveHistory();
+            db.ref('bot_games/' + userId).update({ fen: game.fen(), lastFrom: mv.from, lastTo: mv.to });
+            updateStatus();
+        }
     }
 
     function startBotGame() {
-        isVsBot = true;
-        inGame = true;
-        myRole = 'white';
+        isVsBot = true; inGame = true; myRole = 'white';
         stopLobbyMusic();
-        
-        game.reset();
-        gameOver = false;
-        whiteTimeLeft = 600;
-        blackTimeLeft = 600;
-        lastClockUpdate = Date.now();
-
+        game.reset(); gameOver = false;
+        whiteTimeLeft = 600; blackTimeLeft = 600;
+        lastClockUpdateGlobal = Date.now();
+        if(globalTimer) clearInterval(globalTimer);
+        startGlobalTimer();
         db.ref('presence/' + userId).update({ inGame: true });
         db.ref('bot_games/' + userId).set({ fen: game.fen(), player: currentName, ts: Date.now() });
-        db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: Date.now() });
         
         document.getElementById('menu').style.display = 'none';
         document.getElementById('board').style.display = 'block';
@@ -1154,222 +977,40 @@
         document.getElementById('status-container').style.display = 'flex';
         document.getElementById('resign-btn').style.display = 'block';
         document.getElementById('draw-btn').style.display = 'none';
-        document.getElementById('chat-toggle-btn').style.display = 'none'; 
-
-        document.getElementById('clock-white').innerText = "Siz (Oq): " + formatTime(whiteTimeLeft);
-        document.getElementById('clock-black').innerText = LOCALES[currentLang].botName + " (Qora): " + formatTime(blackTimeLeft);
-        
+        document.getElementById('chat-toggle-btn').style.display = 'none';
+        updateClocksDisplay();
         updateMoveHistory();
-
-        const config = {
-            draggable: false,
-            position: 'start',
-            orientation: 'white',
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-        };
+        const config = { draggable: false, position: 'start', orientation: 'white', pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' };
         board = Chessboard('board', config);
-        
-        $('#board').off().on('mousedown touchstart', '.square-55d63', function(e) {
-            let square = $(this).data('square');
-            onSquareClick(square);
-        });
-
+        $('#board').off().on('mousedown touchstart', '.square-55d63', function(e) { onSquareClick($(this).data('square')); });
         updateStatus();
     }
-    /* ========================================================================== */
 
-    function offerDraw() {
-        if(isVsBot || gameOver) return;
-        db.ref('games/' + gameId).update({ event: 'draw_offer', sender: userId });
-    }
-
-    function startGame(id, role) {
-        isVsBot = false;
-        inGame = true;
-        gameId = id;
-        myRole = role;
-        stopLobbyMusic();
-        
-        game.reset();
-        gameOver = false;
-        whiteTimeLeft = 600;
-        blackTimeLeft = 600;
-        lastClockUpdate = Date.now();
-
-        db.ref('presence/' + userId).update({ inGame: true });
-        
-        document.getElementById('menu').style.display = 'none';
-        document.getElementById('board').style.display = 'block';
-        document.getElementById('history-container').style.display = 'block';
-        document.getElementById('status-container').style.display = 'flex';
-        document.getElementById('resign-btn').style.display = 'block';
-        document.getElementById('draw-btn').style.display = 'block';
-        document.getElementById('chat-toggle-btn').style.display = 'block';
-
-        document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
-        document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
-
-        setupChatSystem();
-        updateMoveHistory();
-
-        const config = {
-            draggable: false,
-            position: 'start',
-            orientation: myRole,
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-        };
-        board = Chessboard('board', config);
-        
-        $('#board').off().on('mousedown touchstart', '.square-55d63', function(e) {
-            let square = $(this).data('square');
-            onSquareClick(square);
-        });
-
-        db.ref('games/' + gameId).on('value', (snap) => {
-            if (isVsBot) return;
-            const data = snap.val();
-            if (!data) return;
-
-            if (data.fen && data.fen !== game.fen()) {
-                const oldPieceCount = game.fen().split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
-                game.load(data.fen);
-                const newPieceCount = data.fen.split(' ')[0].replace(/[^a-zA-Z]/g, "").length;
-                
-                if (newPieceCount < oldPieceCount) playSound('capture-sound'); else playSound('move-sound');
-                
-                board.position(data.fen);
-                highlightLastMove(data.lastFrom, data.lastTo);
-                updateMoveHistory();
-                updateStatus();
-            }
-            if (data.event === 'resign') {
-                finishGame(true, LOCALES[currentLang].opponentResigned);
-            }
-            if (data.event === 'draw_offer' && data.sender !== userId) {
-                db.ref('games/' + gameId).update({ event: 'none' });
-                if (confirm(LOCALES[currentLang].drawOffer)) {
-                    db.ref('games/' + gameId).update({ event: 'draw_accept' });
-                } else {
-                    db.ref('games/' + gameId).update({ event: 'draw_reject' });
-                }
-            }
-            if (data.event === 'draw_accept') {
-                finishGame('draw', LOCALES[currentLang].drawText);
-            }
-            if (data.event === 'draw_reject' && data.sender === userId) {
-                db.ref('games/' + gameId).update({ event: 'none' });
-                alert(LOCALES[currentLang].drawReject);
-            }
-        });
-
-        db.ref('games/' + gameId + '/clocks').on('value', (snap) => {
-            if (isVsBot) return;
-            const data = snap.val();
-            const currentTurn = game.turn();
-            const myTurnSymbol = myRole === 'white' ? 'w' : 'b';
-            if (data && currentTurn !== myTurnSymbol) {
-                whiteTimeLeft = data.w;
-                blackTimeLeft = data.b;
-                lastClockUpdate = Date.now();
-                document.getElementById('clock-white').innerText = (myRole === 'white' ? "Siz (Oq): " : "Raqib (Oq): ") + formatTime(whiteTimeLeft);
-                document.getElementById('clock-black').innerText = (myRole === 'black' ? "Siz (Qora): " : "Raqib (Qora): ") + formatTime(blackTimeLeft);
-            }
-        });
-
-        updateStatus();
-    }
+    function offerDraw() { if(!isVsBot && !gameOver) db.ref('games/' + gameId).update({ event: 'draw_offer', sender: userId }); }
+    function startGame(id, role) { isVsBot=false; inGame=true; gameId=id; myRole=role; stopLobbyMusic(); game.reset(); gameOver=false; whiteTimeLeft=600; blackTimeLeft=600; lastClockUpdateGlobal=Date.now(); if(globalTimer) clearInterval(globalTimer); startGlobalTimer(); db.ref('presence/'+userId).update({inGame:true}); document.getElementById('menu').style.display='none'; document.getElementById('board').style.display='block'; document.getElementById('history-container').style.display='block'; document.getElementById('status-container').style.display='flex'; document.getElementById('resign-btn').style.display='block'; document.getElementById('draw-btn').style.display='block'; document.getElementById('chat-toggle-btn').style.display='block'; updateClocksDisplay(); setupChatSystem(); updateMoveHistory(); const config={draggable:false, position:'start', orientation:myRole, pieceTheme:'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'}; board=Chessboard('board', config); $('#board').off().on('mousedown touchstart','.square-55d63',function(e){onSquareClick($(this).data('square'));}); db.ref('games/'+gameId).on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(!data)return;if(data.fen&&data.fen!==game.fen()){const oldCount=game.fen().split(' ')[0].replace(/[^a-zA-Z]/g,"").length;game.load(data.fen);const newCount=data.fen.split(' ')[0].replace(/[^a-zA-Z]/g,"").length;if(newCount<oldCount)playSound('capture-sound');else playSound('move-sound');board.position(data.fen);highlightLastMove(data.lastFrom,data.lastTo);updateMoveHistory();updateStatus();}if(data.event==='resign')finishGame(true,LOCALES[currentLang].opponentResigned);if(data.event==='draw_offer'&&data.sender!==userId){db.ref('games/'+gameId).update({event:'none'});if(confirm(LOCALES[currentLang].drawOffer))db.ref('games/'+gameId).update({event:'draw_accept'});else db.ref('games/'+gameId).update({event:'draw_reject'});}if(data.event==='draw_accept')finishGame('draw',LOCALES[currentLang].drawText);if(data.event==='draw_reject'&&data.sender===userId){db.ref('games/'+gameId).update({event:'none'});alert(LOCALES[currentLang].drawReject);}}); db.ref('games/'+gameId+'/clocks').on('value',(snap)=>{if(isVsBot)return;const data=snap.val();if(data){whiteTimeLeft=data.w;blackTimeLeft=data.b;lastClockUpdateGlobal=Date.now();updateClocksDisplay();}}); updateStatus(); }
 
     function updateStatus() {
         let status = game.turn() === 'w' ? LOCALES[currentLang].whiteTurn : LOCALES[currentLang].blackTurn;
         $('#board .square-55d63').removeClass('king-check');
-
-        if (game.in_check()) {
+        if(game.in_check()) {
             status += LOCALES[currentLang].checkText;
-            const turn = game.turn();
             const boardMatrix = game.board();
-            for (let i = 0; i < 8; i++) {
-                for (let j = 0; j < 8; j++) {
-                    const p = boardMatrix[i][j];
-                    if (p && p.type === 'k' && p.color === turn) {
-                        const square = String.fromCharCode(97 + j) + (8 - i);
-                        $('#board .square-' + square).addClass('king-check');
-                    }
-                }
-            }
+            for(let i=0;i<8;i++) for(let j=0;j<8;j++) { let p=boardMatrix[i][j]; if(p && p.type==='k' && p.color===game.turn()) $('#board .square-'+String.fromCharCode(97+j)+(8-i)).addClass('king-check'); }
         }
-
-        if (game.in_checkmate()) {
-            status = LOCALES[currentLang].mateText;
-            document.getElementById('status').innerHTML = status;
-            const myTurnSymbol = myRole === 'white' ? 'w' : 'b';
-            finishGame(game.turn() !== myTurnSymbol, game.turn() === myTurnSymbol ? LOCALES[currentLang].lostNoPieces : LOCALES[currentLang].youWon);
-            return;
-        } else if (game.in_draw()) {
-            status = LOCALES[currentLang].drawText;
-            document.getElementById('status').innerHTML = status;
-            finishGame('draw', LOCALES[currentLang].drawText);
-            return;
-        }
-        
-        document.getElementById('status').innerHTML = status;
-        if (!gameOver) startMoveTimer();
+        if(game.in_checkmate()) { status=LOCALES[currentLang].mateText; document.getElementById('status').innerHTML=status; finishGame(game.turn()!==(myRole==='white'?'w':'b'), game.turn()===(myRole==='white'?'w':'b')?LOCALES[currentLang].lostNoPieces:LOCALES[currentLang].youWon); return; }
+        else if(game.in_draw()) { status=LOCALES[currentLang].drawText; document.getElementById('status').innerHTML=status; finishGame('draw',LOCALES[currentLang].drawText); return; }
+        document.getElementById('status').innerHTML=status;
     }
 
-    function resignGame() {
-        if (confirm(LOCALES[currentLang].resignConfirm)) {
-            if (!isVsBot) {
-                db.ref('games/' + gameId).update({ event: 'resign' });
-            }
-            finishGame(false, LOCALES[currentLang].youResigned);
-        }
-    }
+    function resignGame() { if(confirm(LOCALES[currentLang].resignConfirm)) { if(!isVsBot) db.ref('games/'+gameId).update({ event: 'resign' }); finishGame(false, LOCALES[currentLang].youResigned); } }
 
-    function invite(id) {
-        const gid = userId + "_" + id;
-        db.ref('invites/' + id).set({ fromId: userId, fromName: currentName, gameId: gid, ts: Date.now() });
-        startGame(gid, 'white');
-    }
-
-    db.ref('invites/' + userId).on('value', (snap) => {
-        const inv = snap.val();
-        if (inv && !inGame && inv.ts > sessionStartTime) {
-            if (confirm(inv.fromName + " " + LOCALES[currentLang].inviteSent)) {
-                db.ref('invites/' + userId).remove();
-                startGame(inv.gameId, 'black');
-            }
-        }
-    });
-
-    db.ref('presence').on('value', (snap) => {
-        const list = document.getElementById('online-list');
-        list.innerHTML = '';
-        let onlineCount = 0;
-        snap.forEach(c => {
-            if (c.key !== userId && c.val().online && !c.val().inGame) {
-                onlineCount++;
-                list.innerHTML += `<div class="user-item">
-                    <span>👤 ${c.val().name}</span> 
-                    <button class="invite-btn" onclick="invite('${c.key}')">${LOCALES[currentLang].invite}</button>
-                </div>`;
-            }
-        });
-        if (onlineCount === 0) {
-            list.innerHTML = `<div style="text-align:center; padding:15px; color:#aaa;">${LOCALES[currentLang].noPlayers}</div>`;
-        }
-    });
-
-    function stopLobbyMusic() {
-        const lobbyMusic = document.getElementById('lobby-music');
-        lobbyMusic.pause(); lobbyMusic.currentTime = 0; musicStarted = false;
-    }
+    function invite(id) { const gid=userId+"_"+id; db.ref('invites/'+id).set({ fromId: userId, fromName: currentName, gameId: gid, ts: Date.now() }); startGame(gid,'white'); }
+    db.ref('invites/'+userId).on('value',(snap)=>{const inv=snap.val(); if(inv && !inGame && inv.ts>sessionStartTime && confirm(inv.fromName+" "+LOCALES[currentLang].inviteSent)) { db.ref('invites/'+userId).remove(); startGame(inv.gameId,'black'); } });
+    db.ref('presence').on('value',(snap)=>{const list=document.getElementById('online-list'); list.innerHTML=''; let cnt=0; snap.forEach(c=>{if(c.key!==userId && c.val().online && !c.val().inGame){cnt++; list.innerHTML+=`<div class="user-item"><span>👤 ${c.val().name}</span> <button class="invite-btn" onclick="invite('${c.key}')">${LOCALES[currentLang].invite}</button></div>`;}}); if(cnt===0) list.innerHTML=`<div style="text-align:center;padding:15px;color:#aaa;">${LOCALES[currentLang].noPlayers}</div>`; });
 
     let musicStarted = false;
-    function handleInteraction() {
-        if (!musicStarted && !inGame && soundEnabled) {
-            const lobbyMusic = document.getElementById('lobby-music');
-            lobbyMusic.play().catch(() => {}); musicStarted = true;
-        }
-    }
+    function stopLobbyMusic() { const l=document.getElementById('lobby-music'); l.pause(); l.currentTime=0; musicStarted=false; }
+    function handleInteraction() { if (!musicStarted && !inGame && soundEnabled) { document.getElementById('lobby-music').play().catch(()=>{}); musicStarted=true; } }
 </script>
 </body>
 </html>
