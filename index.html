@@ -718,7 +718,7 @@
                 document.getElementById('clock-white').innerText = whiteLabel + formatTime(whiteTimeLeft);
                 document.getElementById('clock-black').innerText = blackLabel + formatTime(blackTimeLeft);
                 
-                if (!isVsBot && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
+                if (!isVsBot && gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
                     db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 }
 
