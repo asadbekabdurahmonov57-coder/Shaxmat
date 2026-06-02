@@ -718,10 +718,11 @@
                 document.getElementById('clock-white').innerText = whiteLabel + formatTime(whiteTimeLeft);
                 document.getElementById('clock-black').innerText = blackLabel + formatTime(blackTimeLeft);
                 
-                if (gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
-                    db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
-                } else if (isVsBot) {
+                // Tuzatilgan qism: Bot o'yinida ham vaqtlarni Firebase'ga yozish
+                if (isVsBot) {
                     db.ref('bot_games/' + userId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
+                } else if (gameId && game.turn() === (myRole === 'white' ? 'w' : 'b')) {
+                    db.ref('games/' + gameId + '/clocks').set({ w: whiteTimeLeft, b: blackTimeLeft, ts: now });
                 }
 
                 if (whiteTimeLeft <= 0) {
